@@ -35,11 +35,11 @@ func NewService(db store.Database, cfg *config.Config) *Service {
 
 // CreateKeyRequest represents a request to create an API key
 type CreateKeyRequest struct {
-	Name        string
-	Permissions []string
-	CorpName    string
-	AppName     string // Empty for admin keys
-	ExpiresDays int    // 0 for no expiration
+	Name        string   `json:"name" binding:"required"`
+	Permissions []string `json:"permissions" binding:"required"`
+	CorpName    string   `json:"corp_name" binding:"required"`
+	AppName     string   `json:"app_name"`           // Empty for admin keys
+	ExpiresDays int      `json:"expires_days"`        // 0 for no expiration
 }
 
 // CreateKey creates a new API key

@@ -132,6 +132,11 @@ func runMigrations(db *sql.DB) error {
 		}
 	}
 
+	// Enable foreign key constraints (SQLite defaults to OFF)
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		return fmt.Errorf("failed to enable foreign keys: %w", err)
+	}
+
 	return nil
 }
 
@@ -505,13 +510,13 @@ func (s *SQLite) ListWeComApps(ctx context.Context, corpName string) ([]*WeComAp
 func (s *SQLite) UpdateWeComApp(ctx context.Context, app *WeComApp) error {
 	query := `
 		UPDATE wecom_apps
-		SET agent_id = ?, secret_enc = ?, nonce = ?, access_token = ?, token_expires_at = ?, updated_at = ?
-		WHERE corp_name = ? AND name = ?
+		SET name = ?, corp_name = ?, agent_id = ?, secret_enc = ?, nonce = ?, access_token = ?, token_expires_at = ?, updated_at = ?
+		WHERE id = ?
 	`
 
 	result, err := s.db.ExecContext(ctx, query,
-		app.AgentID, app.SecretEnc, app.Nonce, app.AccessToken,
-		app.TokenExpiresAt, time.Now(), app.CorpName, app.Name,
+		app.Name, app.CorpName, app.AgentID, app.SecretEnc, app.Nonce,
+		app.AccessToken, app.TokenExpiresAt, time.Now(), app.ID,
 	)
 
 	if err != nil {

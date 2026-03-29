@@ -348,7 +348,7 @@ async function loadApps() {
 
     try {
         const corpName = document.getElementById('corpFilter')?.value || '';
-        let url = `${API_BASE}/admin/corps/${corpName}/apps`;
+        let url = `${API_BASE}/admin/apps?corp_name=${encodeURIComponent(corpName)}`;
 
         if (!corpName) {
             // Load all corps first, then load apps for each
@@ -361,7 +361,7 @@ async function loadApps() {
 
                 for (const corp of corps) {
                     try {
-                        const appsResponse = await fetch(`${API_BASE}/admin/corps/${corp.name}/apps`, { headers: getAuthHeaders() });
+                        const appsResponse = await fetch(`${API_BASE}/admin/apps?corp_name=${encodeURIComponent(corp.name)}`, { headers: getAuthHeaders() });
                         const appsResult = await appsResponse.json();
 
                         if (appsResult.code === 0) {
@@ -446,7 +446,7 @@ async function createApp(event) {
     const secret = document.getElementById('appSecret').value;
 
     try {
-        const response = await fetch(`${API_BASE}/admin/corps/${corpName}/apps`, {
+        const response = await fetch(`${API_BASE}/admin/apps?corp_name=${encodeURIComponent(corpName)}`, {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({ name, agent_id: agentId, secret })
@@ -499,7 +499,7 @@ async function editApp(event) {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/admin/corps/${corpName}/apps/${id}`, {
+        const response = await fetch(`${API_BASE}/admin/apps/${id}?corp_name=${encodeURIComponent(corpName)}`, {
             method: 'PUT',
             headers: getAuthHeaders(),
             body: JSON.stringify(body)
@@ -526,7 +526,7 @@ async function deleteApp(id, corpName, name) {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/admin/corps/${corpName}/apps/${id}`, {
+        const response = await fetch(`${API_BASE}/admin/apps/${id}?corp_name=${encodeURIComponent(corpName)}`, {
             method: 'DELETE',
             headers: getAuthHeaders()
         });

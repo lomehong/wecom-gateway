@@ -752,24 +752,26 @@ func (h *Handler) UpdateWeComApp(c *gin.Context) {
 		return
 	}
 
-	// Encrypt new secret
-	nonce, err := crypto.GenerateRandomBytes(12)
-	if err != nil {
-		httputil.InternalError(c, "Failed to generate nonce: "+err.Error())
-		return
-	}
-
-	secretEnc, err := crypto.EncryptString(req.Secret, h.service.encKey)
-	if err != nil {
-		httputil.InternalError(c, "Failed to encrypt secret: "+err.Error())
-		return
-	}
-
 	// Update fields
 	app.Name = req.Name
 	app.AgentID = req.AgentID
-	app.SecretEnc = secretEnc
-	app.Nonce = string(nonce)
+
+	// Only update secret if provided
+	if req.Secret != "" {
+		nonce, err := crypto.GenerateRandomBytes(12)
+		if err != nil {
+			httputil.InternalError(c, "Failed to generate nonce: "+err.Error())
+			return
+		}
+
+		secretEnc, err := crypto.EncryptString(req.Secret, h.service.encKey)
+		if err != nil {
+			httputil.InternalError(c, "Failed to encrypt secret: "+err.Error())
+			return
+		}
+		app.SecretEnc = secretEnc
+		app.Nonce = string(nonce)
+	}
 
 	if err := h.service.DB.UpdateWeComApp(c.Request.Context(), app); err != nil {
 		httputil.InternalError(c, err.Error())

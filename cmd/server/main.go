@@ -124,18 +124,30 @@ func main() {
 
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
+		checks := gin.H{}
+
 		// Check database connection
+		dbStatus := "ok"
 		if err := db.Ping(c.Request.Context()); err != nil {
+			dbStatus = "unhealthy: " + err.Error()
+		}
+		checks["database"] = dbStatus
+
+		overallStatus := "ok"
+		if dbStatus != "ok" {
+			overallStatus = "unhealthy"
 			c.JSON(http.StatusServiceUnavailable, gin.H{
-				"status": "unhealthy",
-				"error":  "database connection failed",
+				"status":  overallStatus,
+				"version": "1.0.0",
+				"checks":  checks,
 			})
 			return
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"status": "ok",
+			"status":  overallStatus,
 			"version": "1.0.0",
+			"checks":  checks,
 		})
 	})
 

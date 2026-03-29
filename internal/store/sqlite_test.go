@@ -490,7 +490,7 @@ func TestSQLite_UpdateWeComApp(t *testing.T) {
 	db.CreateWeComCorp(ctx, &WeComCorp{ID: "c1", Name: "Corp1", CorpID: "ww1"})
 	db.CreateWeComApp(ctx, &WeComApp{ID: "a1", Name: "OA", CorpName: "Corp1", AgentID: 1, SecretEnc: "s", Nonce: "n"})
 
-	app := &WeComApp{Name: "OA", CorpName: "Corp1", AgentID: 999, SecretEnc: "new_secret", Nonce: "new_nonce"}
+	app := &WeComApp{ID: "a1", Name: "OA", CorpName: "Corp1", AgentID: 999, SecretEnc: "new_secret", Nonce: "new_nonce"}
 	err := db.UpdateWeComApp(ctx, app)
 	if err != nil {
 		t.Fatalf("UpdateWeComApp failed: %v", err)
