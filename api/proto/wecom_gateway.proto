@@ -1,0 +1,278 @@
+syntax = "proto3";
+
+package wecom.gateway;
+
+option go_package = "wecom-gateway/api/proto";
+
+// WeCom Gateway Service
+service WeComGateway {
+  // Schedule operations
+  rpc CreateSchedule(CreateScheduleRequest) returns (Schedule);
+  rpc GetSchedules(GetSchedulesRequest) returns (ScheduleList);
+  rpc UpdateSchedule(UpdateScheduleRequest) returns (Schedule);
+  rpc DeleteSchedule(DeleteScheduleRequest) returns (DeleteResponse);
+
+  // Meeting room operations
+  rpc ListMeetingRooms(ListMeetingRoomsRequest) returns (MeetingRoomList);
+  rpc GetRoomAvailability(AvailabilityRequest) returns (TimeSlotList);
+  rpc BookMeetingRoom(BookMeetingRoomRequest) returns (BookingResult);
+
+  // Message operations
+  rpc SendText(TextMessageRequest) returns (SendResult);
+  rpc SendMarkdown(MarkdownMessageRequest) returns (SendResult);
+  rpc SendImage(ImageMessageRequest) returns (SendResult);
+  rpc SendFile(FileMessageRequest) returns (SendResult);
+  rpc SendCard(CardMessageRequest) returns (SendResult);
+}
+
+// Admin Service
+service WeComGatewayAdmin {
+  // API Key management
+  rpc CreateAPIKey(CreateAPIKeyRequest) returns (APIKeyInfo);
+  rpc ListAPIKeys(ListAPIKeysRequest) returns (APIKeyList);
+  rpc DeleteAPIKey(DeleteAPIKeyRequest) returns (DeleteResponse);
+
+  // Audit logs
+  rpc QueryAuditLogs(QueryAuditLogsRequest) returns (AuditLogList);
+
+  // Dashboard
+  rpc GetDashboardStats(DashboardStatsRequest) returns (DashboardStats);
+}
+
+// Schedule types
+message CreateScheduleRequest {
+  string organizer = 1;
+  string summary = 2;
+  string description = 3;
+  int64 start_time = 4;
+  int64 end_time = 5;
+  repeated string attendees = 6;
+  string location = 7;
+  int32 remind_before_minutes = 8;
+}
+
+message Schedule {
+  string schedule_id = 1;
+  string organizer = 2;
+  string summary = 3;
+  string description = 4;
+  int64 start_time = 5;
+  int64 end_time = 6;
+  repeated string attendees = 7;
+  string location = 8;
+  string cal_id = 9;
+}
+
+message GetSchedulesRequest {
+  string userid = 1;
+  int64 start_time = 2;
+  int64 end_time = 3;
+  int32 limit = 4;
+}
+
+message ScheduleList {
+  repeated Schedule schedules = 1;
+}
+
+message UpdateScheduleRequest {
+  string schedule_id = 1;
+  string summary = 2;
+  string description = 3;
+  int64 start_time = 4;
+  int64 end_time = 5;
+  repeated string attendees = 6;
+  string location = 7;
+  int32 remind_before_minutes = 8;
+}
+
+message DeleteScheduleRequest {
+  string schedule_id = 1;
+}
+
+message DeleteResponse {
+  string message = 1;
+}
+
+// Meeting room types
+message MeetingRoom {
+  string mbooking_id = 1;
+  string name = 2;
+  int32 capacity = 3;
+  string city = 4;
+  string building = 5;
+  string floor = 6;
+  repeated string equipment = 7;
+  string description = 8;
+}
+
+message ListMeetingRoomsRequest {
+  string city = 1;
+  string building = 2;
+  string floor = 3;
+  int32 capacity = 4;
+  repeated string equipment = 5;
+  int32 limit = 6;
+  string cursor = 7;
+}
+
+message MeetingRoomList {
+  repeated MeetingRoom rooms = 1;
+  string next_cursor = 2;
+}
+
+message AvailabilityRequest {
+  string meetingroom_id = 1;
+  int64 start_time = 2;
+  int64 end_time = 3;
+}
+
+message TimeSlot {
+  int64 start_time = 1;
+  int64 end_time = 2;
+}
+
+message TimeSlotList {
+  repeated TimeSlot slots = 1;
+}
+
+message BookMeetingRoomRequest {
+  string meetingroom_id = 1;
+  string subject = 2;
+  int64 start_time = 3;
+  int64 end_time = 4;
+  string booker = 5;
+  repeated string attendees = 6;
+}
+
+message BookingResult {
+  string booking_id = 1;
+  string schedule_id = 2;
+  int64 start_time = 3;
+  int64 end_time = 4;
+}
+
+// Message types
+message TextMessageRequest {
+  string receiver_type = 1;
+  repeated string receiver_ids = 2;
+  string content = 3;
+  bool safe = 4;
+}
+
+message MarkdownMessageRequest {
+  string receiver_type = 1;
+  repeated string receiver_ids = 2;
+  string content = 3;
+}
+
+message ImageMessageRequest {
+  string receiver_type = 1;
+  repeated string receiver_ids = 2;
+  string media_id = 3;
+}
+
+message FileMessageRequest {
+  string receiver_type = 1;
+  repeated string receiver_ids = 2;
+  string media_id = 3;
+}
+
+message CardMessageRequest {
+  string receiver_type = 1;
+  repeated string receiver_ids = 2;
+  map<string, string> card_content = 3;
+}
+
+message SendResult {
+  repeated string invalid_user_ids = 1;
+  repeated string invalid_party_ids = 2;
+  repeated string invalid_tag_ids = 3;
+  repeated string unquoted_user_ids = 4;
+  repeated string failed_user_ids = 5;
+  repeated string failed_party_ids = 6;
+  repeated string failed_tag_ids = 7;
+}
+
+// Admin types
+message CreateAPIKeyRequest {
+  string name = 1;
+  repeated string permissions = 2;
+  string corp_name = 3;
+  string app_name = 4;
+  int32 expires_days = 5;
+}
+
+message APIKeyInfo {
+  string id = 1;
+  string name = 2;
+  repeated string permissions = 3;
+  string corp_name = 4;
+  string app_name = 5;
+  int64 expires_at = 6;
+  bool disabled = 7;
+  int64 created_at = 8;
+  int64 updated_at = 9;
+}
+
+message ListAPIKeysRequest {
+  bool disabled = 1;
+  int32 limit = 2;
+  string cursor = 3;
+}
+
+message APIKeyList {
+  repeated APIKeyInfo keys = 1;
+  string next_cursor = 2;
+}
+
+message DeleteAPIKeyRequest {
+  string id = 1;
+}
+
+message QueryAuditLogsRequest {
+  string api_key_name = 1;
+  string method = 2;
+  string path = 3;
+  int32 status_code = 4;
+  int64 start_time = 5;
+  int64 end_time = 6;
+  int32 limit = 7;
+  string cursor = 8;
+}
+
+message AuditLogList {
+  repeated AuditLog logs = 1;
+  string next_cursor = 2;
+}
+
+message AuditLog {
+  int64 id = 1;
+  int64 timestamp = 2;
+  string protocol = 3;
+  string api_key_id = 4;
+  string api_key_name = 5;
+  string method = 6;
+  string path = 7;
+  string query = 8;
+  string body = 9;
+  int32 status_code = 10;
+  int32 duration_ms = 11;
+  string client_ip = 12;
+  string error_msg = 13;
+}
+
+message DashboardStatsRequest {
+  int64 start_time = 1;
+  int64 end_time = 2;
+}
+
+message DashboardStats {
+  int64 start_time = 1;
+  int64 end_time = 2;
+  int32 total_api_keys = 3;
+  int32 active_api_keys = 4;
+  int32 total_corps = 5;
+  int32 total_apps = 6;
+  int32 total_requests = 7;
+  int32 error_requests = 8;
+}

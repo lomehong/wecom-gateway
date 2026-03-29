@@ -1,0 +1,49 @@
+# WeCom Gateway Configuration Example
+# Copy this file to config.yaml and customize for your environment
+
+server:
+  http_listen: ":8080"      # HTTP server listen address
+  grpc_listen: ":9090"      # gRPC server listen address
+  mode: "release"           # "debug" or "release"
+  tls_cert: ""              # Path to TLS certificate (optional)
+  tls_key: ""               # Path to TLS private key (optional)
+
+database:
+  driver: "sqlite"          # "sqlite" or "postgres"
+  dsn: "data/wecom.db"      # SQLite file path or PostgreSQL DSN
+
+wecom:
+  corps:
+    - name: "main"          # Corporation name (used for referencing)
+      corp_id: "ww1234567890abcdef"
+      apps:
+        - name: "oa"        # Application name
+          agent_id: 1000001
+          secret: "your_app_secret_here"
+        - name: "hr"
+          agent_id: 1000002
+          secret: "your_app_secret_here"
+    # Add more corporations as needed
+    # - name: "partner"
+    #   corp_id: "ww0987654321fedcba"
+    #   apps:
+    #     - name: "external"
+    #       agent_id: 2000001
+    #       secret: "your_app_secret_here"
+
+auth:
+  admin_api_key: "wgk_admin_your_admin_key_here"
+  key_expiry_days: 365      # Default API key expiry in days
+  rate_limit: 100           # Requests per minute per API key
+
+ui:
+  enabled: true             # Enable/disable management UI
+
+# Environment Variable Override Examples:
+# WECOM_HTTP_LISTEN=:8080
+# WECOM_DB_DRIVER=sqlite
+# WECOM_DB_DSN=data/wecom.db
+# WECOM_CORP_MAIN_ID=ww1234567890abcdef
+# WECOM_APP_MAIN_OA_SECRET=your_secret_here
+# WECOM_ADMIN_API_KEY=wgk_admin_xxxxx
+# WECOM_RATE_LIMIT=100

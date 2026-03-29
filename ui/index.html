@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WeCom Gateway - 管理后台</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Login Prompt -->
+    <div id="loginPrompt" class="login-prompt" style="display:none;">
+        <div class="login-box">
+            <h2>🔐 WeCom Gateway 管理后台</h2>
+            <p>请输入管理员账号密码</p>
+            <form onsubmit="handleLogin(event)">
+                <input type="text" id="usernameInput" placeholder="用户名" required autocomplete="username">
+                <input type="password" id="passwordInput" placeholder="密码" required autocomplete="current-password">
+                <button type="submit">登录</button>
+            </form>
+            <div id="loginError" class="error-message" style="display:none;"></div>
+        </div>
+    </div>
+
+    <div class="container" id="mainContent">
+        <header>
+            <h1>WeCom Gateway 管理后台</h1>
+            <div class="user-info">
+                <span id="currentUser">管理员</span>
+                <button id="logoutBtn" onclick="logout()">退出</button>
+            </div>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab-btn active" onclick="showTab('dashboard')">仪表盘</button>
+            <button class="tab-btn" onclick="showTab('corps')">企业管理</button>
+            <button class="tab-btn" onclick="showTab('apps')">应用管理</button>
+            <button class="tab-btn" onclick="showTab('keys')">智能体 API Keys</button>
+            <button class="tab-btn" onclick="showTab('logs')">审计日志</button>
+            <button class="tab-btn" onclick="showTab('settings')">设置</button>
+        </nav>
+
+        <main>
+            <!-- Dashboard Tab -->
+            <section id="dashboard" class="tab-content active">
+                <h2>系统概览</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>企业数</h3>
+                        <p class="stat-value" id="totalCorps">-</p>
+                        <p class="stat-label">总数</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>应用数</h3>
+                        <p class="stat-value" id="totalApps">-</p>
+                        <p class="stat-label">总数</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>API Keys</h3>
+                        <p class="stat-value" id="totalKeys">-</p>
+                        <p class="stat-label">总数</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>今日请求</h3>
+                        <p class="stat-value" id="todayRequests">-</p>
+                        <p class="stat-label">24小时内</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Corps Tab -->
+            <section id="corps" class="tab-content">
+                <div class="section-header">
+                    <h2>企业管理</h2>
+                    <button class="btn btn-primary" onclick="showCreateCorpModal()">+ 添加企业</button>
+                </div>
+                <div class="table-container">
+                    <table id="corpsTable">
+                        <thead>
+                            <tr>
+                                <th>名称</th>
+                                <th>CorpID</th>
+                                <th>应用数量</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpsTableBody">
+                            <tr>
+                                <td colspan="5" class="loading">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Apps Tab -->
+            <section id="apps" class="tab-content">
+                <div class="section-header">
+                    <h2>应用管理</h2>
+                    <div class="filters">
+                        <select id="corpFilter" onchange="loadApps()">
+                            <option value="">所有企业</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="showCreateAppModal()">+ 添加应用</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="appsTable">
+                        <thead>
+                            <tr>
+                                <th>名称</th>
+                                <th>企业</th>
+                                <th>AgentID</th>
+                                <th>Secret</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="appsTableBody">
+                            <tr>
+                                <td colspan="6" class="loading">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- API Keys Tab -->
+            <section id="keys" class="tab-content">
+                <div class="section-header">
+                    <h2>智能体 API Keys 管理</h2>
+                    <button class="btn btn-primary" onclick="showCreateKeyModal()">+ 创建 API Key</button>
+                </div>
+                <div class="table-container">
+                    <table id="keysTable">
+                        <thead>
+                            <tr>
+                                <th>名称</th>
+                                <th>权限</th>
+                                <th>企业</th>
+                                <th>应用</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="keysTableBody">
+                            <tr>
+                                <td colspan="7" class="loading">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Audit Logs Tab -->
+            <section id="logs" class="tab-content">
+                <div class="section-header">
+                    <h2>审计日志</h2>
+                    <div class="filters">
+                        <select id="methodFilter" onchange="loadLogs()">
+                            <option value="">所有方法</option>
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                            <option value="PATCH">PATCH</option>
+                            <option value="DELETE">DELETE</option>
+                        </select>
+                        <input type="text" id="pathFilter" placeholder="路径过滤" onchange="loadLogs()">
+                        <button onclick="loadLogs()">刷新</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="logsTable">
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>API Key</th>
+                                <th>方法</th>
+                                <th>路径</th>
+                                <th>状态码</th>
+                                <th>耗时(ms)</th>
+                                <th>客户端IP</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody">
+                            <tr>
+                                <td colspan="7" class="loading">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Settings Tab -->
+            <section id="settings" class="tab-content">
+                <h2>设置</h2>
+                <div class="settings-container">
+                    <div class="setting-section">
+                        <h3>修改密码</h3>
+                        <form onsubmit="handleChangePassword(event)">
+                            <div class="form-group">
+                                <label for="oldPassword">当前密码</label>
+                                <input type="password" id="oldPassword" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="newPassword">新密码</label>
+                                <input type="password" id="newPassword" required minlength="6">
+                                <small>密码至少需要6个字符</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="confirmPassword">确认新密码</label>
+                                <input type="password" id="confirmPassword" required minlength="6">
+                            </div>
+                            <button type="submit" class="btn btn-primary">修改密码</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Create Corp Modal -->
+    <div id="createCorpModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🏢 添加企业</h2>
+                <button class="close-btn" onclick="closeCreateCorpModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="createCorpForm" onsubmit="createCorp(event)">
+                    <div class="form-group">
+                        <label for="corpName">企业名称</label>
+                        <input type="text" id="corpName" placeholder="例如：我的公司" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="corpId">CorpID</label>
+                        <input type="text" id="corpId" placeholder="企业微信后台获取的 CorpID" required>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn" onclick="closeCreateCorpModal()">取消</button>
+                        <button type="submit" class="btn btn-primary">创建企业</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Corp Modal -->
+    <div id="editCorpModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>✏️ 编辑企业</h2>
+                <button class="close-btn" onclick="closeEditCorpModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="editCorpForm" onsubmit="editCorp(event)">
+                    <input type="hidden" id="editCorpId">
+                    <div class="form-group">
+                        <label for="editCorpName">企业名称</label>
+                        <input type="text" id="editCorpName" required readonly class="readonly-input">
+                        <small>企业名称创建后不可修改</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="editCorpIdValue">CorpID</label>
+                        <input type="text" id="editCorpIdValue" placeholder="企业微信 CorpID" required>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn" onclick="closeEditCorpModal()">取消</button>
+                        <button type="submit" class="btn btn-primary">保存修改</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create App Modal -->
+    <div id="createAppModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📱 添加应用</h2>
+                <button class="close-btn" onclick="closeCreateAppModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="createAppForm" onsubmit="createApp(event)">
+                    <div class="form-group">
+                        <label for="appCorpName">所属企业 <span class="required">*</span></label>
+                        <select id="appCorpName" required>
+                            <option value="">请选择企业</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="appName">应用名称</label>
+                        <input type="text" id="appName" placeholder="例如：OA审批" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="appAgentId">AgentID</label>
+                        <input type="number" id="appAgentId" placeholder="企业微信后台获取的 AgentID" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="appSecret">Secret</label>
+                        <div class="input-password-wrap">
+                            <input type="password" id="appSecret" placeholder="企业微信应用的 Secret" required>
+                            <button type="button" class="toggle-pwd" onclick="togglePasswordVisibility('appSecret', this)">👁</button>
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn" onclick="closeCreateAppModal()">取消</button>
+                        <button type="submit" class="btn btn-primary">创建应用</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit App Modal -->
+    <div id="editAppModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>✏️ 编辑应用</h2>
+                <button class="close-btn" onclick="closeEditAppModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="editAppForm" onsubmit="editApp(event)">
+                    <input type="hidden" id="editAppCorpName">
+                    <input type="hidden" id="editAppId">
+                    <div class="form-group">
+                        <label for="editAppName">应用名称</label>
+                        <input type="text" id="editAppName" placeholder="应用名称" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editAppAgentId">AgentID</label>
+                        <input type="number" id="editAppAgentId" placeholder="AgentID" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editAppSecret">Secret</label>
+                        <div class="input-password-wrap">
+                            <input type="password" id="editAppSecret" placeholder="留空则不修改">
+                            <button type="button" class="toggle-pwd" onclick="togglePasswordVisibility('editAppSecret', this)">👁</button>
+                        </div>
+                        <small>留空则不修改 Secret</small>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn" onclick="closeEditAppModal()">取消</button>
+                        <button type="submit" class="btn btn-primary">保存修改</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create API Key Modal -->
+    <div id="createKeyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🔑 创建 API Key</h2>
+                <button class="close-btn" onclick="closeCreateKeyModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="createKeyForm" onsubmit="createKey(event)">
+                    <div class="form-group">
+                        <label for="keyName">名称</label>
+                        <input type="text" id="keyName" placeholder="例如：Claude Agent" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="keyPermissions">权限范围</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label"><input type="checkbox" value="calendar:read" class="perm-checkbox"> 📅 日历读取</label>
+                            <label class="checkbox-label"><input type="checkbox" value="calendar:write" class="perm-checkbox"> 📝 日程写入</label>
+                            <label class="checkbox-label"><input type="checkbox" value="meetingroom:read" class="perm-checkbox"> 🏫 会议室读取</label>
+                            <label class="checkbox-label"><input type="checkbox" value="meetingroom:write" class="perm-checkbox"> 📋 会议室预订</label>
+                            <label class="checkbox-label"><input type="checkbox" value="message:send" class="perm-checkbox"> 💬 消息发送</label>
+                            <label class="checkbox-label"><input type="checkbox" value="*" class="perm-checkbox"> ⚡ 全部权限</label>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="keyCorp">所属企业</label>
+                            <select id="keyCorp" required>
+                                <option value="">请选择企业</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="keyApp">关联应用</label>
+                            <select id="keyApp">
+                                <option value="">管理员 Key（无应用）</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="keyExpiry">有效期</label>
+                        <select id="keyExpiry">
+                            <option value="0">永不过期</option>
+                            <option value="30">30 天</option>
+                            <option value="90">90 天</option>
+                            <option value="365" selected>1 年</option>
+                            <option value="730">2 年</option>
+                        </select>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn" onclick="closeCreateKeyModal()">取消</button>
+                        <button type="submit" class="btn btn-primary">创建 Key</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Key Created Modal -->
+    <div id="keyCreatedModal" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2>✅ API Key 创建成功</h2>
+                <button class="close-btn" onclick="closeKeyCreatedModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="key-tip">请立即复制并妥善保存此 API Key，关闭后将无法再次查看：</p>
+                <div class="key-display">
+                    <code id="newApiKey"></code>
+                    <button class="copy-btn" onclick="copyApiKey()">📋 复制</button>
+                </div>
+                <div class="warning">
+                    <strong>⚠️ 安全提示：</strong>此 Key 仅显示一次，请勿泄露给他人。如怀疑泄露，请立即删除并重新创建。
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" onclick="closeKeyCreatedModal()">我已安全保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
