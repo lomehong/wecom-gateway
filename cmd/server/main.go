@@ -72,7 +72,7 @@ func main() {
 	defer db.Close()
 
 	// Initialize services
-	wecomClient := wecom.NewClient(cfg, encKey)
+	wecomClient := wecom.NewClientWithDB(cfg, db, encKey)
 	authenticator := auth.NewAPIKeyAuthenticator(db)
 	rateLimiter := ratelimit.NewRateLimiter()
 	auditLogger := audit.NewLogger(db)

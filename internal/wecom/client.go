@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"sync"
@@ -13,6 +15,7 @@ import (
 
 	"wecom-gateway/internal/config"
 	"wecom-gateway/internal/crypto"
+	"wecom-gateway/internal/store"
 )
 
 // Client defines the interface for WeChat Work API client
@@ -47,6 +50,7 @@ type HTTPClient interface {
 // impl implements the Client interface
 type impl struct {
 	config   *config.Config
+	db       store.Database // Database for reading corp/app config
 	httpCli  HTTPClient
 	tokens   map[string]*tokenInfo
 	tokensMu sync.RWMutex
@@ -54,22 +58,39 @@ type impl struct {
 }
 
 type tokenInfo struct {
-	token      string
-	expiresAt  time.Time
-	corpID     string
-	agentID    int64
-	secret     string // Encrypted secret
-	nonce      string // Nonce for AES-GCM
+	token     string
+	expiresAt time.Time
+	corpID    string
+	agentID   int64
+	secret    string // Encrypted secret
+	nonce     string // Nonce for AES-GCM
 }
 
 // NewClient creates a new WeChat Work API client
 func NewClient(cfg *config.Config, encKey []byte) Client {
 	return &impl{
 		config:  cfg,
+		db:      nil,
 		httpCli: &http.Client{Timeout: 30 * time.Second},
 		tokens:  make(map[string]*tokenInfo),
 		encKey:  encKey,
 	}
+}
+
+// NewClientWithDB creates a new WeChat Work API client with database support
+func NewClientWithDB(cfg *config.Config, db store.Database, encKey []byte) Client {
+	return &impl{
+		config:  cfg,
+		db:      db,
+		httpCli: &http.Client{Timeout: 30 * time.Second},
+		tokens:  make(map[string]*tokenInfo),
+		encKey:  encKey,
+	}
+}
+
+// SetDB sets the database for the client (allows post-construction injection)
+func (c *impl) SetDB(db store.Database) {
+	c.db = db
 }
 
 // getToken retrieves or fetches an access token for the given corp and app
@@ -94,25 +115,51 @@ func (c *impl) getToken(ctx context.Context, corpName, appName string) (string, 
 		return tok.token, nil
 	}
 
-	// Get app configuration
-	app, err := c.config.GetAppByName(corpName, appName)
-	if err != nil {
-		return "", fmt.Errorf("failed to get app config: %w", err)
+	// Try database first, then fall back to config
+	var corpID string
+	var agentID int64
+	var secret string
+
+	if c.db != nil {
+		// Look up from database
+		corp, err := c.db.GetWeComCorpByName(ctx, corpName)
+		if err == nil {
+			corpID = corp.CorpID
+		}
+
+		app, err := c.db.GetWeComApp(ctx, corpName, appName)
+		if err == nil {
+			agentID = app.AgentID
+			secret = app.SecretEnc
+		}
 	}
 
-	corp, err := c.config.GetCorpByName(corpName)
-	if err != nil {
-		return "", fmt.Errorf("failed to get corp config: %w", err)
+	// Fall back to config if not found in database
+	if corpID == "" {
+		corp, err := c.config.GetCorpByName(corpName)
+		if err != nil {
+			return "", fmt.Errorf("corporation '%s' not found in database or config", corpName)
+		}
+		corpID = corp.CorpID
+	}
+
+	if agentID == 0 {
+		app, err := c.config.GetAppByName(corpName, appName)
+		if err != nil {
+			return "", fmt.Errorf("application '%s' not found in corporation '%s'", appName, corpName)
+		}
+		agentID = app.AgentID
+		secret = app.Secret
 	}
 
 	// Decrypt secret
-	secret, err := crypto.DecryptString(app.Secret, c.encKey)
+	decryptedSecret, err := crypto.DecryptString(secret, c.encKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to decrypt secret: %w", err)
 	}
 
 	// Fetch access token
-	token, expiresAt, err := c.fetchAccessToken(ctx, corp.CorpID, app.AgentID, secret)
+	token, expiresAt, err := c.fetchAccessToken(ctx, corpID, agentID, decryptedSecret)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch access token: %w", err)
 	}
@@ -121,10 +168,10 @@ func (c *impl) getToken(ctx context.Context, corpName, appName string) (string, 
 	c.tokens[key] = &tokenInfo{
 		token:     token,
 		expiresAt: expiresAt,
-		corpID:    corp.CorpID,
-		agentID:   app.AgentID,
-		secret:    app.Secret,
-		nonce:     "", // Will be populated if needed
+		corpID:    corpID,
+		agentID:   agentID,
+		secret:    secret,
+		nonce:     "",
 	}
 
 	return token, nil
@@ -565,9 +612,15 @@ func (c *impl) SendMarkdown(ctx context.Context, corpName, appName string, param
 func (c *impl) SendImage(ctx context.Context, corpName, appName string, params *ImageMessageParams) (*SendResult, error) {
 	mediaID := params.MediaID
 	if mediaID == "" && params.ImageURL != "" {
-		// Upload image first
-		// This is a simplified version - in production, you'd download and upload
-		return nil, fmt.Errorf("image URL upload not implemented, please use media_id")
+		// Download image and upload to WeCom
+		data, filename, err := c.downloadURL(ctx, params.ImageURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to download image: %w", err)
+		}
+		mediaID, err = c.UploadMedia(ctx, corpName, appName, "image", data, filename)
+		if err != nil {
+			return nil, fmt.Errorf("failed to upload image: %w", err)
+		}
 	}
 
 	body := map[string]interface{}{
@@ -584,7 +637,15 @@ func (c *impl) SendImage(ctx context.Context, corpName, appName string, params *
 func (c *impl) SendFile(ctx context.Context, corpName, appName string, params *FileMessageParams) (*SendResult, error) {
 	mediaID := params.MediaID
 	if mediaID == "" && params.FileURL != "" {
-		return nil, fmt.Errorf("file URL upload not implemented, please use media_id")
+		// Download file and upload to WeCom
+		data, filename, err := c.downloadURL(ctx, params.FileURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to download file: %w", err)
+		}
+		mediaID, err = c.UploadMedia(ctx, corpName, appName, "file", data, filename)
+		if err != nil {
+			return nil, fmt.Errorf("failed to upload file: %w", err)
+		}
 	}
 
 	body := map[string]interface{}{
@@ -653,11 +714,93 @@ func (c *impl) UploadMedia(ctx context.Context, corpName, appName string, mediaT
 		return "", err
 	}
 
-	_ = fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token=%s&type=%s", token, mediaType)
+	uploadURL := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token=%s&type=%s", token, mediaType)
 
-	// Create multipart form data
-	// This is a simplified version - in production, use proper multipart writer
-	return "", fmt.Errorf("media upload not fully implemented")
+	// Create multipart form
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	part, err := writer.CreateFormFile("media", filename)
+	if err != nil {
+		return "", fmt.Errorf("failed to create form file: %w", err)
+	}
+
+	if _, err := part.Write(data); err != nil {
+		return "", fmt.Errorf("failed to write data: %w", err)
+	}
+
+	if err := writer.Close(); err != nil {
+		return "", fmt.Errorf("failed to close multipart writer: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", uploadURL, body)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var result struct {
+		ErrCode  int    `json:"errcode"`
+		ErrMsg   string `json:"errmsg"`
+		MediaID  string `json:"media_id"`
+		CreatedAt string `json:"created_at"`
+	}
+
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return "", err
+	}
+
+	if result.ErrCode != 0 {
+		return "", &WeComAPIError{ErrCode: result.ErrCode, ErrMsg: result.ErrMsg}
+	}
+
+	return result.MediaID, nil
+}
+
+// downloadURL downloads content from a URL and returns the data and filename
+func (c *impl) downloadURL(ctx context.Context, url string) ([]byte, string, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, "", err
+	}
+
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("download failed with status %d", resp.StatusCode)
+	}
+
+	// Extract filename from URL or Content-Disposition
+	filename := "downloaded_file"
+	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
+		if _, params, err := mime.ParseMediaType(cd); err == nil {
+			if fn, ok := params["filename"]; ok {
+				filename = fn
+			}
+		}
+	}
+
+	return data, filename, nil
 }
 
 // Helper functions
