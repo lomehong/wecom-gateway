@@ -184,7 +184,7 @@ func TestService_SendImage(t *testing.T) {
 		AppName:  "test-app",
 	}
 
-	result, err := svc.SendImage(context.Background(), authCtx, "user", []string{"user1"}, "test-media-id")
+	result, err := svc.SendImage(context.Background(), authCtx, "user", []string{"user1"}, "test-media-id", "")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestService_SendFile(t *testing.T) {
 		AppName:  "test-app",
 	}
 
-	result, err := svc.SendFile(context.Background(), authCtx, "user", []string{"user1"}, "test-file-id")
+	result, err := svc.SendFile(context.Background(), authCtx, "user", []string{"user1"}, "test-file-id", "")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

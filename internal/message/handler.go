@@ -128,12 +128,13 @@ func (h *Handler) SendMarkdown(c *gin.Context) {
 type SendImageRequest struct {
 	ReceiverType string   `json:"receiver_type" binding:"required"`
 	ReceiverIDs  []string `json:"receiver_ids" binding:"required,min=1"`
-	MediaID      string   `json:"media_id" binding:"required"`
+	MediaID      string   `json:"media_id"`
+	ImageURL     string   `json:"image_url"`
 }
 
 // SendImage handles POST /v1/messages/image
 // @Summary Send image message
-// @Description Send an image message to users or departments
+// @Description Send an image message to users or departments. Supports either media_id or image_url.
 // @Tags messages
 // @Accept json
 // @Produce json
@@ -155,9 +156,14 @@ func (h *Handler) SendImage(c *gin.Context) {
 		return
 	}
 
+	if req.MediaID == "" && req.ImageURL == "" {
+		httputil.BadRequest(c, "media_id or image_url is required")
+		return
+	}
+
 	authCtx, _ := auth.GetAuthContext(c)
 
-	result, err := h.service.SendImage(c.Request.Context(), authCtx, req.ReceiverType, req.ReceiverIDs, req.MediaID)
+	result, err := h.service.SendImage(c.Request.Context(), authCtx, req.ReceiverType, req.ReceiverIDs, req.MediaID, req.ImageURL)
 	if err != nil {
 		httputil.InternalError(c, err.Error())
 		return
@@ -170,12 +176,13 @@ func (h *Handler) SendImage(c *gin.Context) {
 type SendFileRequest struct {
 	ReceiverType string   `json:"receiver_type" binding:"required"`
 	ReceiverIDs  []string `json:"receiver_ids" binding:"required,min=1"`
-	MediaID      string   `json:"media_id" binding:"required"`
+	MediaID      string   `json:"media_id"`
+	FileURL      string   `json:"file_url"`
 }
 
 // SendFile handles POST /v1/messages/file
 // @Summary Send file message
-// @Description Send a file message to users or departments
+// @Description Send a file message to users or departments. Supports either media_id or file_url.
 // @Tags messages
 // @Accept json
 // @Produce json
@@ -197,9 +204,14 @@ func (h *Handler) SendFile(c *gin.Context) {
 		return
 	}
 
+	if req.MediaID == "" && req.FileURL == "" {
+		httputil.BadRequest(c, "media_id or file_url is required")
+		return
+	}
+
 	authCtx, _ := auth.GetAuthContext(c)
 
-	result, err := h.service.SendFile(c.Request.Context(), authCtx, req.ReceiverType, req.ReceiverIDs, req.MediaID)
+	result, err := h.service.SendFile(c.Request.Context(), authCtx, req.ReceiverType, req.ReceiverIDs, req.MediaID, req.FileURL)
 	if err != nil {
 		httputil.InternalError(c, err.Error())
 		return

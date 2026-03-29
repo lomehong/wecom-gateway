@@ -58,7 +58,7 @@ func (s *Service) SendMarkdown(ctx context.Context, authCtx *auth.AuthContext, r
 }
 
 // SendImage sends an image message
-func (s *Service) SendImage(ctx context.Context, authCtx *auth.AuthContext, receiverType string, receiverIDs []string, mediaID string) (*wecom.SendResult, error) {
+func (s *Service) SendImage(ctx context.Context, authCtx *auth.AuthContext, receiverType string, receiverIDs []string, mediaID string, imageURL string) (*wecom.SendResult, error) {
 	corpName := authCtx.CorpName
 	appName := authCtx.AppName
 
@@ -66,6 +66,7 @@ func (s *Service) SendImage(ctx context.Context, authCtx *auth.AuthContext, rece
 		ReceiverType: receiverType,
 		ReceiverIDs:  receiverIDs,
 		MediaID:      mediaID,
+		ImageURL:     imageURL,
 	}
 
 	result, err := s.wecomClient.SendImage(ctx, corpName, appName, params)
@@ -77,7 +78,7 @@ func (s *Service) SendImage(ctx context.Context, authCtx *auth.AuthContext, rece
 }
 
 // SendFile sends a file message
-func (s *Service) SendFile(ctx context.Context, authCtx *auth.AuthContext, receiverType string, receiverIDs []string, mediaID string) (*wecom.SendResult, error) {
+func (s *Service) SendFile(ctx context.Context, authCtx *auth.AuthContext, receiverType string, receiverIDs []string, mediaID string, fileURL string) (*wecom.SendResult, error) {
 	corpName := authCtx.CorpName
 	appName := authCtx.AppName
 
@@ -85,6 +86,7 @@ func (s *Service) SendFile(ctx context.Context, authCtx *auth.AuthContext, recei
 		ReceiverType: receiverType,
 		ReceiverIDs:  receiverIDs,
 		MediaID:      mediaID,
+		FileURL:      fileURL,
 	}
 
 	result, err := s.wecomClient.SendFile(ctx, corpName, appName, params)
