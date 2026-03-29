@@ -30,8 +30,8 @@ type ShareDocumentRequest struct {
 
 // EditSheetRequest 编辑表格内容请求
 type EditSheetRequest struct {
-	Row   int    `json:"row" binding:"required"`   // 行号（0-based）
-	Col   int    `json:"col" binding:"required"`   // 列号（0-based）
+	Row   int    `json:"row" binding:"gte=0"`     // 行号（0-based）
+	Col   int    `json:"col" binding:"gte=0"`     // 列号（0-based）
 	Value string `json:"value" binding:"required"` // 单元格值
 }
 

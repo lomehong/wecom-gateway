@@ -17,6 +17,18 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
+// ListDocuments handles GET /v1/docs
+// @Summary 文档列表（预留）
+// @Description 当前版本不支持文档列表，请使用空间文件列表
+// @Tags documents
+// @Produce json
+// @Success 200 {object} httputil.Response
+// @Security BearerAuth
+// @Router /v1/docs [get]
+func (h *Handler) ListDocuments(c *gin.Context) {
+	httputil.BadRequest(c, "document listing is not supported, use GET /v1/docs/spaces/:spaceid/files instead")
+}
+
 // CreateDocument handles POST /v1/docs
 // @Summary 新建文档
 // @Description 创建一个新的企业微信文档

@@ -201,6 +201,7 @@ func main() {
 		docGroup := v1.Group("/docs")
 		docGroup.Use(auth.GinMiddleware(authenticator))
 		{
+			docGroup.GET("", auth.RequirePermission("document:read"), documentHandler.ListDocuments)
 			docGroup.POST("", auth.RequirePermission("document:write"), documentHandler.CreateDocument)
 			docGroup.GET("/:docid", auth.RequirePermission("document:read"), documentHandler.GetDocument)
 			docGroup.PUT("/:docid/rename", auth.RequirePermission("document:write"), documentHandler.RenameDocument)
