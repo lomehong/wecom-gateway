@@ -137,6 +137,66 @@ func (h *Handler) DeleteAPIKey(c *gin.Context) {
 	})
 }
 
+// UpdateAPIKey handles PATCH /v1/admin/api-keys/:id
+// @Summary Update API key
+// @Description Enable/disable an API key
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Param id path string true "API Key ID"
+// @Param request body UpdateAPIKeyRequest true "Update parameters"
+// @Success 200 {object} httputil.Response
+// @Failure 400 {object} httputil.Response
+// @Failure 403 {object} httputil.Response
+// @Failure 404 {object} httputil.Response
+// @Security BearerAuth
+// @Router /v1/admin/api-keys/{id} [patch]
+func (h *Handler) UpdateAPIKey(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		httputil.BadRequest(c, "api key id is required")
+		return
+	}
+
+	var req UpdateAPIKeyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		httputil.BadRequest(c, "Invalid request parameters: "+err.Error())
+		return
+	}
+
+	if req.Disabled != nil {
+		if *req.Disabled {
+			if err := h.apiKeySvc.DisableKey(c.Request.Context(), id); err != nil {
+				if err == store.ErrNotFound {
+					httputil.NotFound(c, "api key")
+					return
+				}
+				httputil.InternalError(c, err.Error())
+				return
+			}
+		} else {
+			if err := h.apiKeySvc.EnableKey(c.Request.Context(), id); err != nil {
+				if err == store.ErrNotFound {
+					httputil.NotFound(c, "api key")
+					return
+				}
+				httputil.InternalError(c, err.Error())
+				return
+			}
+		}
+	}
+
+	httputil.Success(c, gin.H{
+		"id":    id,
+		"disabled": req.Disabled,
+	})
+}
+
+// UpdateAPIKeyRequest represents update API key request
+type UpdateAPIKeyRequest struct {
+	Disabled *bool `json:"disabled"`
+}
+
 // QueryAuditLogs handles GET /v1/admin/audit-logs
 // @Summary Query audit logs
 // @Description Query audit logs with filtering

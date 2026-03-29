@@ -36,7 +36,7 @@ func NewService(db store.Database, cfg *config.Config) *Service {
 // CreateKeyRequest represents a request to create an API key
 type CreateKeyRequest struct {
 	Name        string   `json:"name" binding:"required"`
-	Permissions []string `json:"permissions" binding:"required"`
+	Permissions []string `json:"permissions"`
 	CorpName    string   `json:"corp_name" binding:"required"`
 	AppName     string   `json:"app_name"`           // Empty for admin keys
 	ExpiresDays int      `json:"expires_days"`        // 0 for no expiration
@@ -235,11 +235,7 @@ func (s *Service) validateCreateRequest(req *CreateKeyRequest) error {
 		return fmt.Errorf("name is required")
 	}
 
-	if len(req.Permissions) == 0 {
-		return ErrInvalidPermissions
-	}
-
-	// Validate permissions
+	// Validate permissions (empty means no permissions, which is allowed)
 	validPerms := map[string]bool{
 		"calendar:read":      true,
 		"calendar:write":     true,

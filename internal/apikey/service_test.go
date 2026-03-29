@@ -250,12 +250,12 @@ func TestService_CreateKey_ValidationError(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "missing permissions",
+			name: "empty permissions (allowed)",
 			req: &CreateKeyRequest{
 				Name:     "test-key",
 				CorpName: "test-corp",
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name: "invalid permission",

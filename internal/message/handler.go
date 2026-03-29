@@ -17,6 +17,22 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
+// validReceiverTypes defines allowed receiver types
+var validReceiverTypes = map[string]bool{
+	"user":       true,
+	"department": true,
+	"tag":        true,
+}
+
+// validateReceiverType checks if the receiver_type is valid
+func validateReceiverType(c *gin.Context, receiverType string) bool {
+	if !validReceiverTypes[receiverType] {
+		httputil.BadRequest(c, "invalid receiver_type, must be one of: user, department, tag")
+		return false
+	}
+	return true
+}
+
 // SendMessageRequest represents a common message request
 type SendMessageRequest struct {
 	ReceiverType string   `json:"receiver_type" binding:"required"`
@@ -48,6 +64,10 @@ func (h *Handler) SendText(c *gin.Context) {
 	var req SendTextRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.BadRequest(c, "Invalid request parameters: "+err.Error())
+		return
+	}
+
+	if !validateReceiverType(c, req.ReceiverType) {
 		return
 	}
 
@@ -89,6 +109,10 @@ func (h *Handler) SendMarkdown(c *gin.Context) {
 		return
 	}
 
+	if !validateReceiverType(c, req.ReceiverType) {
+		return
+	}
+
 	authCtx, _ := auth.GetAuthContext(c)
 
 	result, err := h.service.SendMarkdown(c.Request.Context(), authCtx, req.ReceiverType, req.ReceiverIDs, req.Content)
@@ -124,6 +148,10 @@ func (h *Handler) SendImage(c *gin.Context) {
 	var req SendImageRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.BadRequest(c, "Invalid request parameters: "+err.Error())
+		return
+	}
+
+	if !validateReceiverType(c, req.ReceiverType) {
 		return
 	}
 
@@ -165,6 +193,10 @@ func (h *Handler) SendFile(c *gin.Context) {
 		return
 	}
 
+	if !validateReceiverType(c, req.ReceiverType) {
+		return
+	}
+
 	authCtx, _ := auth.GetAuthContext(c)
 
 	result, err := h.service.SendFile(c.Request.Context(), authCtx, req.ReceiverType, req.ReceiverIDs, req.MediaID)
@@ -200,6 +232,10 @@ func (h *Handler) SendCard(c *gin.Context) {
 	var req SendCardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.BadRequest(c, "Invalid request parameters: "+err.Error())
+		return
+	}
+
+	if !validateReceiverType(c, req.ReceiverType) {
 		return
 	}
 

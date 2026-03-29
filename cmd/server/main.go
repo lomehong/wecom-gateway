@@ -206,6 +206,7 @@ func main() {
 				authenticatedGroup.POST("/change-password", adminHandler.ChangePassword)
 				authenticatedGroup.GET("/api-keys", adminHandler.ListAPIKeys)
 				authenticatedGroup.POST("/api-keys", adminHandler.CreateAPIKey)
+				authenticatedGroup.PATCH("/api-keys/:id", adminHandler.UpdateAPIKey)
 				authenticatedGroup.DELETE("/api-keys/:id", adminHandler.DeleteAPIKey)
 				authenticatedGroup.GET("/audit-logs", adminHandler.QueryAuditLogs)
 				authenticatedGroup.GET("/dashboard", adminHandler.GetDashboardStats)
