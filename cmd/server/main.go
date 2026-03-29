@@ -18,6 +18,7 @@ import (
 	"wecom-gateway/internal/auth"
 	"wecom-gateway/internal/config"
 	"wecom-gateway/internal/crypto"
+	"wecom-gateway/internal/document"
 	"wecom-gateway/internal/grpcserver"
 	"wecom-gateway/internal/meeting"
 	"wecom-gateway/internal/message"
@@ -83,12 +84,15 @@ func main() {
 	scheduleSvc := schedule.NewService(wecomClient)
 	meetingSvc := meeting.NewService(wecomClient)
 	messageSvc := message.NewService(wecomClient)
+	documentClient := document.NewClient(wecomClient)
+	documentSvc := document.NewService(documentClient)
 	adminSvc := admin.NewService(db, cfg, apiKeySvc, auditLogger, encKey)
 
 	// Initialize handlers
 	scheduleHandler := schedule.NewHandler(scheduleSvc)
 	meetingHandler := meeting.NewHandler(meetingSvc)
 	messageHandler := message.NewHandler(messageSvc)
+	documentHandler := document.NewHandler(documentSvc)
 	adminHandler := admin.NewHandler(adminSvc, apiKeySvc, auditQuer, authManager)
 
 	// Initialize gRPC server
@@ -191,6 +195,31 @@ func main() {
 			messageGroup.POST("/image", auth.RequirePermission("message:send"), messageHandler.SendImage)
 			messageGroup.POST("/file", auth.RequirePermission("message:send"), messageHandler.SendFile)
 			messageGroup.POST("/card", auth.RequirePermission("message:send"), messageHandler.SendCard)
+		}
+
+		// Document management routes
+		docGroup := v1.Group("/docs")
+		docGroup.Use(auth.GinMiddleware(authenticator))
+		{
+			docGroup.POST("", auth.RequirePermission("document:write"), documentHandler.CreateDocument)
+			docGroup.GET("/:docid", auth.RequirePermission("document:read"), documentHandler.GetDocument)
+			docGroup.PUT("/:docid/rename", auth.RequirePermission("document:write"), documentHandler.RenameDocument)
+			docGroup.DELETE("/:docid", auth.RequirePermission("document:write"), documentHandler.DeleteDocument)
+			docGroup.POST("/:docid/share", auth.RequirePermission("document:write"), documentHandler.ShareDocument)
+			docGroup.GET("/:docid/permissions", auth.RequirePermission("document:read"), documentHandler.GetPermissions)
+			docGroup.PUT("/:docid/content", auth.RequirePermission("document:write"), documentHandler.EditContent)
+			docGroup.GET("/:docid/data", auth.RequirePermission("document:read"), documentHandler.GetDocumentData)
+			docGroup.POST("/:docid/images", auth.RequirePermission("document:write"), documentHandler.UploadImage)
+
+			// Sheet operations
+			docGroup.POST("/sheets/:docid/content", auth.RequirePermission("document:write"), documentHandler.EditSheetContent)
+			docGroup.GET("/sheets/:docid/rows", auth.RequirePermission("document:read"), documentHandler.GetSheetRowCol)
+			docGroup.GET("/sheets/:docid/data", auth.RequirePermission("document:read"), documentHandler.GetSheetData)
+
+			// Space operations
+			docGroup.POST("/spaces", auth.RequirePermission("document:write"), documentHandler.CreateSpace)
+			docGroup.GET("/spaces/:spaceid", auth.RequirePermission("document:read"), documentHandler.GetSpaceInfo)
+			docGroup.GET("/spaces/:spaceid/files", auth.RequirePermission("document:read"), documentHandler.GetSpaceFileList)
 		}
 
 		// Admin routes

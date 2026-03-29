@@ -98,3 +98,7 @@ func (m *MockClient) SendCard(ctx context.Context, corpName, appName string, par
 func (m *MockClient) UploadMedia(ctx context.Context, corpName, appName string, mediaType string, data []byte, filename string) (string, error) {
 	return "media-id-123", nil
 }
+
+func (m *MockClient) GetAccessToken(ctx context.Context, corpName, appName string) (string, error) {
+	return "mock-access-token", nil
+}

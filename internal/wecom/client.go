@@ -40,6 +40,9 @@ type Client interface {
 
 	// Media operations
 	UploadMedia(ctx context.Context, corpName, appName string, mediaType string, data []byte, filename string) (string, error)
+
+	// Token operations
+	GetAccessToken(ctx context.Context, corpName, appName string) (string, error)
 }
 
 // HTTPClient represents the HTTP client interface
@@ -91,6 +94,11 @@ func NewClientWithDB(cfg *config.Config, db store.Database, encKey []byte) Clien
 // SetDB sets the database for the client (allows post-construction injection)
 func (c *impl) SetDB(db store.Database) {
 	c.db = db
+}
+
+// GetAccessToken retrieves or fetches an access token for the given corp and app
+func (c *impl) GetAccessToken(ctx context.Context, corpName, appName string) (string, error) {
+	return c.getToken(ctx, corpName, appName)
 }
 
 // getToken retrieves or fetches an access token for the given corp and app

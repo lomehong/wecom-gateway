@@ -324,3 +324,7 @@ func (m *MockWeComClientForSchedule) SendCard(ctx context.Context, corpName, app
 func (m *MockWeComClientForSchedule) UploadMedia(ctx context.Context, corpName, appName string, mediaType string, data []byte, filename string) (string, error) {
 	return "", nil
 }
+
+func (m *MockWeComClientForSchedule) GetAccessToken(ctx context.Context, corpName, appName string) (string, error) {
+	return "mock-access-token", nil
+}

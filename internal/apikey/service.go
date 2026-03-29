@@ -242,6 +242,8 @@ func (s *Service) validateCreateRequest(req *CreateKeyRequest) error {
 		"meetingroom:read":   true,
 		"meetingroom:write":  true,
 		"message:send":       true,
+		"document:read":      true,
+		"document:write":     true,
 		"*":                  true, // Admin wildcard
 	}
 

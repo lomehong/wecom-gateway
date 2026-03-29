@@ -248,3 +248,7 @@ func TestService_SendCard(t *testing.T) {
 		t.Error("expected result, got nil")
 	}
 }
+
+func (m *MockWeComClient) GetAccessToken(ctx context.Context, corpName, appName string) (string, error) {
+	return "mock-access-token", nil
+}
