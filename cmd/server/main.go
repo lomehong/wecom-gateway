@@ -23,6 +23,8 @@ import (
 	"wecom-gateway/internal/grpcserver"
 	"wecom-gateway/internal/meeting"
 	"wecom-gateway/internal/message"
+	"wecom-gateway/internal/mcp"
+	"wecom-gateway/internal/openapi"
 	"wecom-gateway/internal/ratelimit"
 	"wecom-gateway/internal/schedule"
 	"wecom-gateway/internal/store"
@@ -282,6 +284,15 @@ func main() {
 			}
 		}
 	}
+
+	// MCP endpoint
+	mcpHandler := mcp.NewHandler(wecomClient, authenticator)
+	router.POST("/mcp", mcpHandler.HandleRPC)
+
+	// OpenAPI endpoint
+	openapiHandler := openapi.NewHandler()
+	router.GET("/openapi.json", openapiHandler.ServeJSON)
+	router.GET("/docs", openapiHandler.ServeDocs)
 
 	// Start HTTP server
 	httpSrv := &http.Server{

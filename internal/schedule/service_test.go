@@ -253,12 +253,95 @@ func TestService_DeleteSchedule_Error(t *testing.T) {
 	}
 }
 
+// --- Availability Tests (Phase 3.2) ---
+
+func TestService_CheckAvailability_Success(t *testing.T) {
+	mockClient := &MockWeComClientForSchedule{
+		CheckAvailabilityFunc: func(ctx context.Context, corpName, appName string, opts *wecom.AvailabilityOptions) ([]*wecom.UserAvailability, error) {
+			result := make([]*wecom.UserAvailability, len(opts.UserIDs))
+			for i, uid := range opts.UserIDs {
+				result[i] = &wecom.UserAvailability{
+					UserID: uid,
+					Slots:  []wecom.AvailabilitySlot{},
+				}
+			}
+			return result, nil
+		},
+	}
+	svc := &Service{wecomClient: mockClient}
+
+	authCtx := &auth.AuthContext{
+		CorpName: "test-corp",
+		AppName:  "test-app",
+	}
+
+	req := &CheckAvailabilityRequest{
+		UserIDs:   []string{"user1", "user2"},
+		StartTime: time.Now().Add(1 * time.Hour).Unix(),
+		EndTime:   time.Now().Add(2 * time.Hour).Unix(),
+	}
+
+	result, err := svc.CheckAvailability(context.Background(), authCtx, req)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if len(result) != 2 {
+		t.Errorf("expected 2 results, got %d", len(result))
+	}
+}
+
+func TestService_CheckAvailability_InvalidTimeRange(t *testing.T) {
+	svc := &Service{wecomClient: &MockWeComClientForSchedule{}}
+
+	authCtx := &auth.AuthContext{
+		CorpName: "test-corp",
+		AppName:  "test-app",
+	}
+
+	req := &CheckAvailabilityRequest{
+		UserIDs:   []string{"user1"},
+		StartTime: time.Now().Add(2 * time.Hour).Unix(),
+		EndTime:   time.Now().Add(1 * time.Hour).Unix(),
+	}
+
+	_, err := svc.CheckAvailability(context.Background(), authCtx, req)
+	if err == nil {
+		t.Error("expected error for invalid time range")
+	}
+}
+
+func TestService_CheckAvailability_APIError(t *testing.T) {
+	mockClient := &MockWeComClientForSchedule{
+		CheckAvailabilityFunc: func(ctx context.Context, corpName, appName string, opts *wecom.AvailabilityOptions) ([]*wecom.UserAvailability, error) {
+			return nil, errors.New("check failed")
+		},
+	}
+	svc := &Service{wecomClient: mockClient}
+
+	authCtx := &auth.AuthContext{
+		CorpName: "test-corp",
+		AppName:  "test-app",
+	}
+
+	req := &CheckAvailabilityRequest{
+		UserIDs:   []string{"user1"},
+		StartTime: time.Now().Add(1 * time.Hour).Unix(),
+		EndTime:   time.Now().Add(2 * time.Hour).Unix(),
+	}
+
+	_, err := svc.CheckAvailability(context.Background(), authCtx, req)
+	if err == nil {
+		t.Error("expected error from API")
+	}
+}
+
 // MockWeComClientForSchedule for testing schedule service
 type MockWeComClientForSchedule struct {
 	CreateScheduleFunc  func(ctx context.Context, corpName, appName string, params *wecom.ScheduleParams) (*wecom.Schedule, error)
 	GetSchedulesFunc    func(ctx context.Context, corpName, appName string, userID string, startTime, endTime time.Time, limit int) ([]*wecom.Schedule, error)
 	UpdateScheduleFunc  func(ctx context.Context, corpName, appName string, scheduleID string, params *wecom.ScheduleParams) error
 	DeleteScheduleFunc  func(ctx context.Context, corpName, appName string, scheduleID string) error
+	CheckAvailabilityFunc  func(ctx context.Context, corpName, appName string, opts *wecom.AvailabilityOptions) ([]*wecom.UserAvailability, error)
 }
 
 func (m *MockWeComClientForSchedule) CreateSchedule(ctx context.Context, corpName, appName string, params *wecom.ScheduleParams) (*wecom.Schedule, error) {
@@ -327,4 +410,59 @@ func (m *MockWeComClientForSchedule) UploadMedia(ctx context.Context, corpName, 
 
 func (m *MockWeComClientForSchedule) GetAccessToken(ctx context.Context, corpName, appName string) (string, error) {
 	return "mock-access-token", nil
+}
+
+func (m *MockWeComClientForSchedule) CheckAvailability(ctx context.Context, corpName, appName string, opts *wecom.AvailabilityOptions) ([]*wecom.UserAvailability, error) {
+	if m.CheckAvailabilityFunc != nil {
+		return m.CheckAvailabilityFunc(ctx, corpName, appName, opts)
+	}
+	return []*wecom.UserAvailability{}, nil
+}
+func (m *MockWeComClientForSchedule) GetUserList(ctx context.Context, corpName, appName string, departmentID int) ([]*wecom.ContactUser, error) {
+	return nil, nil
+}
+func (m *MockWeComClientForSchedule) SearchUser(ctx context.Context, corpName, appName string, query string) ([]*wecom.ContactUser, error) {
+	return nil, nil
+}
+func (m *MockWeComClientForSchedule) GetTodoList(ctx context.Context, corpName, appName string, opts *wecom.TodoListOptions) (*wecom.TodoListResult, error) {
+	return nil, nil
+}
+func (m *MockWeComClientForSchedule) GetTodoDetail(ctx context.Context, corpName, appName string, todoIDs []string) ([]*wecom.TodoDetail, error) {
+	return nil, nil
+}
+func (m *MockWeComClientForSchedule) CreateTodo(ctx context.Context, corpName, appName string, params *wecom.CreateTodoParams) (string, error) {
+	return "", nil
+}
+func (m *MockWeComClientForSchedule) UpdateTodo(ctx context.Context, corpName, appName string, todoID string, params *wecom.UpdateTodoParams) error {
+	return nil
+}
+func (m *MockWeComClientForSchedule) DeleteTodo(ctx context.Context, corpName, appName string, todoID string) error {
+	return nil
+}
+func (m *MockWeComClientForSchedule) ChangeTodoUserStatus(ctx context.Context, corpName, appName string, todoID string, status int) error {
+	return nil
+}
+func (m *MockWeComClientForSchedule) CreateMeeting(ctx context.Context, corpName, appName string, params *wecom.CreateMeetingParams) (*wecom.MeetingInfo, error) {
+	return nil, nil
+}
+func (m *MockWeComClientForSchedule) CancelMeeting(ctx context.Context, corpName, appName string, meetingID string) error {
+	return nil
+}
+func (m *MockWeComClientForSchedule) UpdateMeetingInvitees(ctx context.Context, corpName, appName string, meetingID string, invitees *wecom.MeetingInvitees) error {
+	return nil
+}
+func (m *MockWeComClientForSchedule) ListMeetings(ctx context.Context, corpName, appName string, opts *wecom.MeetingListOptions) (*wecom.MeetingListResult, error) {
+	return nil, nil
+}
+func (m *MockWeComClientForSchedule) GetMeetingInfo(ctx context.Context, corpName, appName string, meetingID string) (*wecom.MeetingInfo, error) {
+	return nil, nil
+}
+func (m *MockWeComClientForSchedule) GetChatList(ctx context.Context, corpName, appName string, beginTime, endTime int64) (*wecom.ChatListResult, error) {
+	return nil, nil
+}
+func (m *MockWeComClientForSchedule) GetChatMessages(ctx context.Context, corpName, appName string, chatType int, chatID string, beginTime, endTime int64) (*wecom.ChatMessagesResult, error) {
+	return nil, nil
+}
+func (m *MockWeComClientForSchedule) DownloadMedia(ctx context.Context, corpName, appName string, mediaID string) ([]byte, string, error) {
+	return nil, "", nil
 }

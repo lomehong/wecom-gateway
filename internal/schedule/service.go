@@ -162,3 +162,26 @@ func (s *Service) DeleteSchedule(ctx context.Context, authCtx *auth.AuthContext,
 
 	return nil
 }
+
+// CheckAvailability checks free/busy status for multiple users (Phase 3.2)
+func (s *Service) CheckAvailability(ctx context.Context, authCtx *auth.AuthContext, req *CheckAvailabilityRequest) ([]*wecom.UserAvailability, error) {
+	if req.EndTime <= req.StartTime {
+		return nil, fmt.Errorf("end_time must be after start_time")
+	}
+
+	corpName := authCtx.CorpName
+	appName := authCtx.AppName
+
+	opts := &wecom.AvailabilityOptions{
+		UserIDs:   req.UserIDs,
+		StartTime: req.StartTime,
+		EndTime:   req.EndTime,
+	}
+
+	result, err := s.wecomClient.CheckAvailability(ctx, corpName, appName, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check availability: %w", err)
+	}
+
+	return result, nil
+}

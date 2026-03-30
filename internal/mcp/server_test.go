@@ -354,7 +354,7 @@ func TestHandleSSE(t *testing.T) {
 	}
 
 	ct := w.Header().Get("Content-Type")
-	if ct != "text/event-stream" {
+	if ct != "text/event-stream" && ct != "text/event-stream;charset=utf-8" {
 		t.Errorf("expected Content-Type text/event-stream, got %s", ct)
 	}
 

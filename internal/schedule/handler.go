@@ -225,3 +225,46 @@ func ParseTimeQueryParam(c *gin.Context, key string) (time.Time, error) {
 	// Try RFC3339
 	return time.Parse(time.RFC3339, val)
 }
+
+// --- Availability Handler (Phase 3.2) ---
+
+// CheckAvailabilityRequest represents a request to check availability
+type CheckAvailabilityRequest struct {
+	UserIDs   []string `json:"userids" binding:"required,min=1"`
+	StartTime int64    `json:"start_time" binding:"required"`
+	EndTime   int64    `json:"end_time" binding:"required"`
+}
+
+// CheckAvailability handles POST /v1/schedules/availability
+// @Summary Check availability
+// @Description Check free/busy status for multiple users
+// @Tags schedules
+// @Accept json
+// @Produce json
+// @Param request body CheckAvailabilityRequest true "Availability parameters"
+// @Success 200 {object} httputil.Response
+// @Failure 400 {object} httputil.Response
+// @Failure 403 {object} httputil.Response
+// @Failure 500 {object} httputil.Response
+// @Security BearerAuth
+// @Router /v1/schedules/availability [post]
+func (h *Handler) CheckAvailability(c *gin.Context) {
+	var req CheckAvailabilityRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		httputil.BadRequest(c, "Invalid request parameters: "+err.Error())
+		return
+	}
+
+	authCtx, _ := auth.GetAuthContext(c)
+
+	result, err := h.service.CheckAvailability(c.Request.Context(), authCtx, &req)
+	if err != nil {
+		httputil.InternalError(c, err.Error())
+		return
+	}
+
+	httputil.Success(c, gin.H{
+		"availability_list": result,
+		"count":             len(result),
+	})
+}

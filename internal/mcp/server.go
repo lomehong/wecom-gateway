@@ -1,5 +1,7 @@
 package mcp
 
+import "encoding/json"
+
 // Tool represents an MCP tool definition
 type Tool struct {
 	Name        string                 `json:"name"`
@@ -28,6 +30,10 @@ type RPCError struct {
 	Code    int         `json:"code"`
 	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
+}
+
+func (e *RPCError) Error() string {
+	return e.Message
 }
 
 // ServerInfo contains MCP server metadata

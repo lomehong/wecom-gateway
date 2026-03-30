@@ -259,3 +259,21 @@ func TestTypes_JSONTags(t *testing.T) {
 		t.Error("type not found in JSON")
 	}
 }
+
+func (m *mockWecomClient) GetUserList(ctx context.Context, corpName, appName string, departmentID int) ([]*wecom.ContactUser, error) { return nil, nil }
+func (m *mockWecomClient) SearchUser(ctx context.Context, corpName, appName string, query string) ([]*wecom.ContactUser, error) { return nil, nil }
+func (m *mockWecomClient) GetTodoList(ctx context.Context, corpName, appName string, opts *wecom.TodoListOptions) (*wecom.TodoListResult, error) { return nil, nil }
+func (m *mockWecomClient) GetTodoDetail(ctx context.Context, corpName, appName string, todoIDs []string) ([]*wecom.TodoDetail, error) { return nil, nil }
+func (m *mockWecomClient) CreateTodo(ctx context.Context, corpName, appName string, params *wecom.CreateTodoParams) (string, error) { return "", nil }
+func (m *mockWecomClient) UpdateTodo(ctx context.Context, corpName, appName string, todoID string, params *wecom.UpdateTodoParams) error { return nil }
+func (m *mockWecomClient) DeleteTodo(ctx context.Context, corpName, appName string, todoID string) error { return nil }
+func (m *mockWecomClient) ChangeTodoUserStatus(ctx context.Context, corpName, appName string, todoID string, status int) error { return nil }
+func (m *mockWecomClient) CreateMeeting(ctx context.Context, corpName, appName string, params *wecom.CreateMeetingParams) (*wecom.MeetingInfo, error) { return nil, nil }
+func (m *mockWecomClient) CancelMeeting(ctx context.Context, corpName, appName string, meetingID string) error { return nil }
+func (m *mockWecomClient) UpdateMeetingInvitees(ctx context.Context, corpName, appName string, meetingID string, invitees *wecom.MeetingInvitees) error { return nil }
+func (m *mockWecomClient) ListMeetings(ctx context.Context, corpName, appName string, opts *wecom.MeetingListOptions) (*wecom.MeetingListResult, error) { return nil, nil }
+func (m *mockWecomClient) GetMeetingInfo(ctx context.Context, corpName, appName string, meetingID string) (*wecom.MeetingInfo, error) { return nil, nil }
+func (m *mockWecomClient) GetChatList(ctx context.Context, corpName, appName string, beginTime, endTime int64) (*wecom.ChatListResult, error) { return nil, nil }
+func (m *mockWecomClient) GetChatMessages(ctx context.Context, corpName, appName string, chatType int, chatID string, beginTime, endTime int64) (*wecom.ChatMessagesResult, error) { return nil, nil }
+func (m *mockWecomClient) DownloadMedia(ctx context.Context, corpName, appName string, mediaID string) ([]byte, string, error) { return nil, "", nil }
+func (m *mockWecomClient) CheckAvailability(ctx context.Context, corpName, appName string, opts *wecom.AvailabilityOptions) ([]*wecom.UserAvailability, error) { return nil, nil }

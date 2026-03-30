@@ -12,11 +12,14 @@ import (
 
 // MockWeComClient for testing message service
 type MockWeComClient struct {
-	SendTextFunc     func(ctx context.Context, corpName, appName string, params *wecom.MessageParams) (*wecom.SendResult, error)
-	SendMarkdownFunc func(ctx context.Context, corpName, appName string, params *wecom.MessageParams) (*wecom.SendResult, error)
-	SendImageFunc    func(ctx context.Context, corpName, appName string, params *wecom.ImageMessageParams) (*wecom.SendResult, error)
-	SendFileFunc     func(ctx context.Context, corpName, appName string, params *wecom.FileMessageParams) (*wecom.SendResult, error)
-	SendCardFunc     func(ctx context.Context, corpName, appName string, params *wecom.CardMessageParams) (*wecom.SendResult, error)
+	SendTextFunc      func(ctx context.Context, corpName, appName string, params *wecom.MessageParams) (*wecom.SendResult, error)
+	SendMarkdownFunc  func(ctx context.Context, corpName, appName string, params *wecom.MessageParams) (*wecom.SendResult, error)
+	SendImageFunc     func(ctx context.Context, corpName, appName string, params *wecom.ImageMessageParams) (*wecom.SendResult, error)
+	SendFileFunc      func(ctx context.Context, corpName, appName string, params *wecom.FileMessageParams) (*wecom.SendResult, error)
+	SendCardFunc      func(ctx context.Context, corpName, appName string, params *wecom.CardMessageParams) (*wecom.SendResult, error)
+	GetChatListFunc   func(ctx context.Context, corpName, appName string, beginTime, endTime int64) (*wecom.ChatListResult, error)
+	GetChatMessagesFunc func(ctx context.Context, corpName, appName string, chatType int, chatID string, beginTime, endTime int64) (*wecom.ChatMessagesResult, error)
+	DownloadMediaFunc func(ctx context.Context, corpName, appName string, mediaID string) ([]byte, string, error)
 }
 
 func (m *MockWeComClient) CreateSchedule(ctx context.Context, corpName, appName string, params *wecom.ScheduleParams) (*wecom.Schedule, error) {
@@ -249,6 +252,153 @@ func TestService_SendCard(t *testing.T) {
 	}
 }
 
+// --- Message Pull Service Tests (Phase 3.1) ---
+
+func TestService_GetChatList_Success(t *testing.T) {
+	mockClient := &MockWeComClient{
+		GetChatListFunc: func(ctx context.Context, corpName, appName string, beginTime, endTime int64) (*wecom.ChatListResult, error) {
+			if beginTime != 1704067200 {
+				t.Errorf("expected begin_time 1704067200, got %d", beginTime)
+			}
+			return &wecom.ChatListResult{
+				ChatList: []wecom.ChatInfo{
+					{ChatID: "chat-1", ChatType: 1, Name: "Group A"},
+					{ChatID: "chat-2", ChatType: 1, Name: "Group B"},
+				},
+			}, nil
+		},
+	}
+	svc := NewService(mockClient)
+
+	authCtx := &auth.AuthContext{
+		CorpName: "test-corp",
+		AppName:  "test-app",
+	}
+
+	result, err := svc.GetChatList(context.Background(), authCtx, 1704067200, 1704153600)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if len(result.ChatList) != 2 {
+		t.Errorf("expected 2 chats, got %d", len(result.ChatList))
+	}
+}
+
+func TestService_GetChatList_Error(t *testing.T) {
+	mockClient := &MockWeComClient{
+		GetChatListFunc: func(ctx context.Context, corpName, appName string, beginTime, endTime int64) (*wecom.ChatListResult, error) {
+			return nil, errors.New("get chat list failed")
+		},
+	}
+	svc := NewService(mockClient)
+
+	authCtx := &auth.AuthContext{
+		CorpName: "test-corp",
+		AppName:  "test-app",
+	}
+
+	_, err := svc.GetChatList(context.Background(), authCtx, 1704067200, 1704153600)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestService_GetChatMessages_Success(t *testing.T) {
+	mockClient := &MockWeComClient{
+		GetChatMessagesFunc: func(ctx context.Context, corpName, appName string, chatType int, chatID string, beginTime, endTime int64) (*wecom.ChatMessagesResult, error) {
+			if chatID != "chat-1" {
+				t.Errorf("expected chat ID chat-1, got %s", chatID)
+			}
+			return &wecom.ChatMessagesResult{
+				MsgList: []wecom.ChatMessage{
+					{MsgID: "msg-1", MsgType: "text", From: "user1"},
+					{MsgID: "msg-2", MsgType: "text", From: "user2"},
+				},
+			}, nil
+		},
+	}
+	svc := NewService(mockClient)
+
+	authCtx := &auth.AuthContext{
+		CorpName: "test-corp",
+		AppName:  "test-app",
+	}
+
+	result, err := svc.GetChatMessages(context.Background(), authCtx, 1, "chat-1", 1704067200, 1704153600)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if len(result.MsgList) != 2 {
+		t.Errorf("expected 2 messages, got %d", len(result.MsgList))
+	}
+}
+
+func TestService_GetChatMessages_Error(t *testing.T) {
+	mockClient := &MockWeComClient{
+		GetChatMessagesFunc: func(ctx context.Context, corpName, appName string, chatType int, chatID string, beginTime, endTime int64) (*wecom.ChatMessagesResult, error) {
+			return nil, errors.New("get messages failed")
+		},
+	}
+	svc := NewService(mockClient)
+
+	authCtx := &auth.AuthContext{
+		CorpName: "test-corp",
+		AppName:  "test-app",
+	}
+
+	_, err := svc.GetChatMessages(context.Background(), authCtx, 1, "chat-1", 1704067200, 1704153600)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestService_DownloadMedia_Success(t *testing.T) {
+	mockClient := &MockWeComClient{
+		DownloadMediaFunc: func(ctx context.Context, corpName, appName string, mediaID string) ([]byte, string, error) {
+			if mediaID != "media-123" {
+				t.Errorf("expected media ID media-123, got %s", mediaID)
+			}
+			return []byte("media-content"), "file.txt", nil
+		},
+	}
+	svc := NewService(mockClient)
+
+	authCtx := &auth.AuthContext{
+		CorpName: "test-corp",
+		AppName:  "test-app",
+	}
+
+	data, filename, err := svc.DownloadMedia(context.Background(), authCtx, "media-123")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if string(data) != "media-content" {
+		t.Errorf("expected content 'media-content', got %s", string(data))
+	}
+	if filename != "file.txt" {
+		t.Errorf("expected filename 'file.txt', got %s", filename)
+	}
+}
+
+func TestService_DownloadMedia_Error(t *testing.T) {
+	mockClient := &MockWeComClient{
+		DownloadMediaFunc: func(ctx context.Context, corpName, appName string, mediaID string) ([]byte, string, error) {
+			return nil, "", errors.New("download failed")
+		},
+	}
+	svc := NewService(mockClient)
+
+	authCtx := &auth.AuthContext{
+		CorpName: "test-corp",
+		AppName:  "test-app",
+	}
+
+	_, _, err := svc.DownloadMedia(context.Background(), authCtx, "media-123")
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
 func (m *MockWeComClient) GetAccessToken(ctx context.Context, corpName, appName string) (string, error) {
 	return "mock-access-token", nil
 }
@@ -306,6 +456,9 @@ func (m *MockWeComClient) GetMeetingInfo(ctx context.Context, corpName, appName 
 }
 
 func (m *MockWeComClient) GetChatList(ctx context.Context, corpName, appName string, beginTime, endTime int64) (*wecom.ChatListResult, error) {
+	if m.GetChatListFunc != nil {
+		return m.GetChatListFunc(ctx, corpName, appName, beginTime, endTime)
+	}
 	return &wecom.ChatListResult{
 		ChatList: []wecom.ChatInfo{
 			{ChatID: "chat-1", ChatType: 1, Name: "Group A"},
@@ -314,6 +467,9 @@ func (m *MockWeComClient) GetChatList(ctx context.Context, corpName, appName str
 }
 
 func (m *MockWeComClient) GetChatMessages(ctx context.Context, corpName, appName string, chatType int, chatID string, beginTime, endTime int64) (*wecom.ChatMessagesResult, error) {
+	if m.GetChatMessagesFunc != nil {
+		return m.GetChatMessagesFunc(ctx, corpName, appName, chatType, chatID, beginTime, endTime)
+	}
 	return &wecom.ChatMessagesResult{
 		MsgList: []wecom.ChatMessage{
 			{MsgID: "msg-1", MsgType: "text", From: "user1"},
@@ -322,6 +478,9 @@ func (m *MockWeComClient) GetChatMessages(ctx context.Context, corpName, appName
 }
 
 func (m *MockWeComClient) DownloadMedia(ctx context.Context, corpName, appName string, mediaID string) ([]byte, string, error) {
+	if m.DownloadMediaFunc != nil {
+		return m.DownloadMediaFunc(ctx, corpName, appName, mediaID)
+	}
 	return []byte("mock-media-content"), "mock-file.txt", nil
 }
 
