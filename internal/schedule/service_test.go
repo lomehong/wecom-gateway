@@ -466,3 +466,7 @@ func (m *MockWeComClientForSchedule) GetChatMessages(ctx context.Context, corpNa
 func (m *MockWeComClientForSchedule) DownloadMedia(ctx context.Context, corpName, appName string, mediaID string) ([]byte, string, error) {
 	return nil, "", nil
 }
+
+func (m *MockWeComClientForSchedule) GetBotMcpConfig(ctx context.Context, corpName, appName string) (*wecom.BotMcpConfig, error) { return nil, nil }
+func (m *MockWeComClientForSchedule) CallBotMcp(ctx context.Context, corpName, appName string, bizType string, request interface{}) ([]byte, error) { return nil, nil }
+

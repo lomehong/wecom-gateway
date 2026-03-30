@@ -672,15 +672,20 @@ func (h *Handler) ListWeComApps(c *gin.Context) {
 
 	result := make([]gin.H, 0, len(apps))
 	for _, app := range apps {
-		result = append(result, gin.H{
+		item := gin.H{
 			"id":          app.ID,
 			"name":        app.Name,
 			"corp_name":   app.CorpName,
+			"app_type":    app.AppType,
 			"agent_id":    app.AgentID,
 			"secret_enc":  "***", // Don't expose the actual secret
 			"created_at":  app.CreatedAt,
 			"updated_at":  app.UpdatedAt,
-		})
+		}
+		if app.BotID != "" {
+			item["bot_id"] = app.BotID
+		}
+		result = append(result, item)
 	}
 
 	httputil.Success(c, gin.H{
@@ -882,5 +887,78 @@ func (h *Handler) DeleteWeComApp(c *gin.Context) {
 	httputil.Success(c, gin.H{
 		"message": "app deleted successfully",
 		"id":      id,
+	})
+}
+
+// WeCom Bot Management
+
+// CreateWeComBotRequest represents create bot request
+type CreateWeComBotRequest struct {
+	Name   string `json:"name" binding:"required"`
+	BotID  string `json:"bot_id" binding:"required"`
+	Secret string `json:"secret" binding:"required"`
+}
+
+// CreateWeComBot handles POST /v1/admin/corps/:corp_name/bots
+// @Summary Create WeCom AI Bot
+// @Description Create a new WeChat Work AI Bot
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Param corp_name path string true "Corporation name"
+// @Param request body CreateWeComBotRequest true "Bot parameters"
+// @Success 201 {object} httputil.Response
+// @Failure 400 {object} httputil.Response
+// @Failure 403 {object} httputil.Response
+// @Failure 500 {object} httputil.Response
+// @Security BearerAuth
+// @Router /v1/admin/corps/{corp_name}/bots [post]
+func (h *Handler) CreateWeComBot(c *gin.Context) {
+	corpName := c.Param("corp_name")
+	if corpName == "" {
+		httputil.BadRequest(c, "corp name is required")
+		return
+	}
+
+	var req CreateWeComBotRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		httputil.BadRequest(c, "Invalid request parameters: "+err.Error())
+		return
+	}
+
+	// Encrypt secret
+	secretEnc, err := crypto.EncryptString(req.Secret, h.service.encKey)
+	if err != nil {
+		httputil.InternalError(c, "Failed to encrypt secret: "+err.Error())
+		return
+	}
+
+	appID := generateID("bot_")
+	app := &store.WeComApp{
+		ID:        appID,
+		Name:      req.Name,
+		CorpName:  corpName,
+		AppType:   "bot",
+		AgentID:   0,
+		BotID:     req.BotID,
+		SecretEnc: secretEnc,
+		Nonce:     "", // EncryptString auto-generates nonce
+	}
+
+	if err := h.service.DB.CreateWeComApp(c.Request.Context(), app); err != nil {
+		if err == store.ErrDuplicate {
+			httputil.Conflict(c, "Bot with this name already exists in this corp")
+			return
+		}
+		httputil.InternalError(c, err.Error())
+		return
+	}
+
+	httputil.Created(c, gin.H{
+		"id":        app.ID,
+		"name":      app.Name,
+		"corp_name": app.CorpName,
+		"app_type":  app.AppType,
+		"bot_id":    app.BotID,
 	})
 }

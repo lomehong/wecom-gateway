@@ -91,9 +91,11 @@ type WeComApp struct {
 	ID             string     `json:"id"`
 	Name           string     `json:"name"`
 	CorpName       string     `json:"corp_name"`
-	AgentID        int64      `json:"agent_id"`
-	SecretEnc      string     `json:"-"` // Encrypted secret
-	Nonce          string     `json:"-"` // Nonce for AES-GCM
+	AppType        string     `json:"app_type"`                     // "app" (traditional) or "bot" (AI bot)
+	AgentID        int64      `json:"agent_id"`                     // 0 for bot type
+	BotID          string     `json:"bot_id,omitempty"`             // only for bot type
+	SecretEnc      string     `json:"-"`                            // Encrypted secret
+	Nonce          string     `json:"-"`                            // Nonce for AES-GCM
 	AccessToken    *string    `json:"access_token,omitempty"`
 	TokenExpiresAt *time.Time `json:"token_expires_at,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`

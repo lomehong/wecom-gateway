@@ -2,6 +2,36 @@ package wecom
 
 import "time"
 
+// Bot MCP config types for AI Bot authentication
+
+// BotMcpConfig represents the MCP configuration returned by get_mcp_config API
+type BotMcpConfig struct {
+	BotID    string          `json:"bot_id"`
+	McpInfos []BotMcpInfo    `json:"mcp_infos"`
+	FetchedAt time.Time      `json:"fetched_at"`
+}
+
+// BotMcpInfo represents a single MCP URL entry for a bot
+type BotMcpInfo struct {
+	BizType string `json:"biz_type"`
+	McpURL  string `json:"mcp_url"`
+}
+
+// BotGetMcpConfigRequest represents the request body for get_mcp_config API
+type BotGetMcpConfigRequest struct {
+	BotID    string `json:"bot_id"`
+	Time     int64  `json:"time"`
+	Nonce    string `json:"nonce"`
+	Signature string `json:"signature"`
+}
+
+// BotGetMcpConfigResponse represents the response from get_mcp_config API
+type BotGetMcpConfigResponse struct {
+	ErrCode  int          `json:"errcode"`
+	ErrMsg   string       `json:"errmsg"`
+	McpInfos []BotMcpInfo `json:"mcp_infos"`
+}
+
 // Schedule represents a WeChat Work schedule
 type Schedule struct {
 	ScheduleID      string    `json:"schedule_id"`

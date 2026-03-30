@@ -487,3 +487,7 @@ func (m *MockWeComClient) DownloadMedia(ctx context.Context, corpName, appName s
 func (m *MockWeComClient) CheckAvailability(ctx context.Context, corpName, appName string, opts *wecom.AvailabilityOptions) ([]*wecom.UserAvailability, error) {
 	return nil, nil
 }
+
+func (m *MockWeComClient) GetBotMcpConfig(ctx context.Context, corpName, appName string) (*wecom.BotMcpConfig, error) { return nil, nil }
+func (m *MockWeComClient) CallBotMcp(ctx context.Context, corpName, appName string, bizType string, request interface{}) ([]byte, error) { return nil, nil }
+

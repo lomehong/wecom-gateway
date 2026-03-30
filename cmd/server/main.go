@@ -281,6 +281,9 @@ func main() {
 				authenticatedGroup.POST("/apps", adminHandler.CreateWeComApp)
 				authenticatedGroup.PUT("/apps/:id", adminHandler.UpdateWeComApp)
 				authenticatedGroup.DELETE("/apps/:id", adminHandler.DeleteWeComApp)
+
+				// WeCom Bot management (AI Bot support)
+				authenticatedGroup.POST("/corps/:corp_name/bots", adminHandler.CreateWeComBot)
 			}
 		}
 	}

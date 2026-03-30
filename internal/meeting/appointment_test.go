@@ -770,3 +770,7 @@ func TestCreateMeetingRequest_WithSettings(t *testing.T) {
 		t.Error("expected enable_recording to be false")
 	}
 }
+
+func (m *MockWeComClientForAppointment) GetBotMcpConfig(ctx context.Context, corpName, appName string) (*wecom.BotMcpConfig, error) { return nil, nil }
+func (m *MockWeComClientForAppointment) CallBotMcp(ctx context.Context, corpName, appName string, bizType string, request interface{}) ([]byte, error) { return nil, nil }
+

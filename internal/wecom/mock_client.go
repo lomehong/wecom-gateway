@@ -231,3 +231,19 @@ func (m *MockClient) CheckAvailability(ctx context.Context, corpName, appName st
 	}
 	return result, nil
 }
+
+// Bot operations (AI Bot support)
+
+func (m *MockClient) GetBotMcpConfig(ctx context.Context, corpName, appName string) (*BotMcpConfig, error) {
+	return &BotMcpConfig{
+		BotID: "mock-bot-id",
+		McpInfos: []BotMcpInfo{
+			{BizType: "chat", McpURL: "https://example.com/mcp/chat?uaKey=test-key"},
+		},
+		FetchedAt: time.Now(),
+	}, nil
+}
+
+func (m *MockClient) CallBotMcp(ctx context.Context, corpName, appName string, bizType string, request interface{}) ([]byte, error) {
+	return []byte(`{"errcode":0,"errmsg":"ok"}`), nil
+}

@@ -277,3 +277,7 @@ func (m *mockWecomClient) GetChatList(ctx context.Context, corpName, appName str
 func (m *mockWecomClient) GetChatMessages(ctx context.Context, corpName, appName string, chatType int, chatID string, beginTime, endTime int64) (*wecom.ChatMessagesResult, error) { return nil, nil }
 func (m *mockWecomClient) DownloadMedia(ctx context.Context, corpName, appName string, mediaID string) ([]byte, string, error) { return nil, "", nil }
 func (m *mockWecomClient) CheckAvailability(ctx context.Context, corpName, appName string, opts *wecom.AvailabilityOptions) ([]*wecom.UserAvailability, error) { return nil, nil }
+
+func (m *mockWecomClient) GetBotMcpConfig(ctx context.Context, corpName, appName string) (*wecom.BotMcpConfig, error) { return nil, nil }
+func (m *mockWecomClient) CallBotMcp(ctx context.Context, corpName, appName string, bizType string, request interface{}) ([]byte, error) { return nil, nil }
+

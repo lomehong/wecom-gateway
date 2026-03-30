@@ -282,3 +282,7 @@ func (m *MockWeComClientForMeeting) DownloadMedia(ctx context.Context, corpName,
 func (m *MockWeComClientForMeeting) CheckAvailability(ctx context.Context, corpName, appName string, opts *wecom.AvailabilityOptions) ([]*wecom.UserAvailability, error) {
 	return nil, nil
 }
+
+func (m *MockWeComClientForMeeting) GetBotMcpConfig(ctx context.Context, corpName, appName string) (*wecom.BotMcpConfig, error) { return nil, nil }
+func (m *MockWeComClientForMeeting) CallBotMcp(ctx context.Context, corpName, appName string, bizType string, request interface{}) ([]byte, error) { return nil, nil }
+

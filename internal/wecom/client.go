@@ -3,6 +3,9 @@ package wecom
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -70,6 +73,10 @@ type Client interface {
 
 	// Schedule availability operations (Phase 3.2)
 	CheckAvailability(ctx context.Context, corpName, appName string, opts *AvailabilityOptions) ([]*UserAvailability, error)
+
+	// Bot operations (AI Bot support)
+	GetBotMcpConfig(ctx context.Context, corpName, appName string) (*BotMcpConfig, error)
+	CallBotMcp(ctx context.Context, corpName, appName string, bizType string, request interface{}) ([]byte, error)
 }
 
 // HTTPClient represents the HTTP client interface
@@ -79,12 +86,14 @@ type HTTPClient interface {
 
 // impl implements the Client interface
 type impl struct {
-	config   *config.Config
-	db       store.Database // Database for reading corp/app config
-	httpCli  HTTPClient
-	tokens   map[string]*tokenInfo
-	tokensMu sync.RWMutex
-	encKey   []byte // Encryption key for storing secrets
+	config      *config.Config
+	db          store.Database // Database for reading corp/app config
+	httpCli     HTTPClient
+	tokens      map[string]*tokenInfo
+	tokensMu    sync.RWMutex
+	encKey      []byte // Encryption key for storing secrets
+	botMcpCache map[string]*BotMcpConfig
+	botMcpMu    sync.RWMutex
 }
 
 type tokenInfo struct {
@@ -99,22 +108,24 @@ type tokenInfo struct {
 // NewClient creates a new WeChat Work API client
 func NewClient(cfg *config.Config, encKey []byte) Client {
 	return &impl{
-		config:  cfg,
-		db:      nil,
-		httpCli: &http.Client{Timeout: 30 * time.Second},
-		tokens:  make(map[string]*tokenInfo),
-		encKey:  encKey,
+		config:      cfg,
+		db:          nil,
+		httpCli:     &http.Client{Timeout: 30 * time.Second},
+		tokens:      make(map[string]*tokenInfo),
+		botMcpCache: make(map[string]*BotMcpConfig),
+		encKey:      encKey,
 	}
 }
 
 // NewClientWithDB creates a new WeChat Work API client with database support
 func NewClientWithDB(cfg *config.Config, db store.Database, encKey []byte) Client {
 	return &impl{
-		config:  cfg,
-		db:      db,
-		httpCli: &http.Client{Timeout: 30 * time.Second},
-		tokens:  make(map[string]*tokenInfo),
-		encKey:  encKey,
+		config:      cfg,
+		db:          db,
+		httpCli:     &http.Client{Timeout: 30 * time.Second},
+		tokens:      make(map[string]*tokenInfo),
+		botMcpCache: make(map[string]*BotMcpConfig),
+		encKey:      encKey,
 	}
 }
 
@@ -1467,4 +1478,164 @@ func (c *impl) CheckAvailability(ctx context.Context, corpName, appName string, 
 	}
 
 	return availabilities, nil
+}
+
+// Bot operations implementation (AI Bot support)
+
+const (
+	botMcpConfigURL    = "https://qyapi.weixin.qq.com/cgi-bin/aibot/cli/get_mcp_config"
+	botMcpCacheTTL     = 30 * time.Minute // Cache MCP config for 30 minutes
+)
+
+// GetBotMcpConfig retrieves the MCP configuration for an AI Bot.
+// It uses a signed request: sha256(secret + bot_id + time + nonce).
+func (c *impl) GetBotMcpConfig(ctx context.Context, corpName, appName string) (*BotMcpConfig, error) {
+	cacheKey := corpName + "/" + appName
+
+	// Check cache first
+	c.botMcpMu.RLock()
+	if cached, ok := c.botMcpCache[cacheKey]; ok && time.Since(cached.FetchedAt) < botMcpCacheTTL {
+		c.botMcpMu.RUnlock()
+		return cached, nil
+	}
+	c.botMcpMu.RUnlock()
+
+	// Fetch fresh config
+	config, err := c.fetchBotMcpConfig(ctx, corpName, appName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Cache it
+	c.botMcpMu.Lock()
+	c.botMcpCache[cacheKey] = config
+	c.botMcpMu.Unlock()
+
+	return config, nil
+}
+
+// fetchBotMcpConfig performs the actual API call to get MCP config for a bot.
+func (c *impl) fetchBotMcpConfig(ctx context.Context, corpName, appName string) (*BotMcpConfig, error) {
+	if c.db == nil {
+		return nil, fmt.Errorf("database not configured, cannot fetch bot mcp config")
+	}
+
+	// Read bot info from database
+	app, err := c.db.GetWeComApp(ctx, corpName, appName)
+	if err != nil {
+		return nil, fmt.Errorf("bot application '%s' not found in corporation '%s': %w", appName, corpName, err)
+	}
+
+	if app.AppType != "bot" || app.BotID == "" {
+		return nil, fmt.Errorf("application '%s' is not a bot type or missing bot_id", appName)
+	}
+
+	// Decrypt secret
+	decryptedSecret, err := crypto.DecryptString(app.SecretEnc, c.encKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt bot secret: %w", err)
+	}
+
+	// Generate time and nonce
+	now := time.Now().Unix()
+	nonceBytes := make([]byte, 16)
+	if _, err := rand.Read(nonceBytes); err != nil {
+		return nil, fmt.Errorf("failed to generate nonce: %w", err)
+	}
+	nonce := hex.EncodeToString(nonceBytes)
+
+	// Compute signature: sha256(secret + bot_id + time + nonce)
+	signPayload := decryptedSecret + app.BotID + fmt.Sprintf("%d", now) + nonce
+	hash := sha256.Sum256([]byte(signPayload))
+	signature := hex.EncodeToString(hash[:])
+
+	// Build request
+	reqBody := &BotGetMcpConfigRequest{
+		BotID:    app.BotID,
+		Time:     now,
+		Nonce:    nonce,
+		Signature: signature,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", botMcpConfigURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call get_mcp_config: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var result BotGetMcpConfigResponse
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if result.ErrCode != 0 {
+		return nil, &WeComAPIError{ErrCode: result.ErrCode, ErrMsg: result.ErrMsg}
+	}
+
+	return &BotMcpConfig{
+		BotID:    app.BotID,
+		McpInfos: result.McpInfos,
+		FetchedAt: time.Now(),
+	}, nil
+}
+
+// CallBotMcp calls a specific MCP endpoint for an AI Bot.
+func (c *impl) CallBotMcp(ctx context.Context, corpName, appName string, bizType string, request interface{}) ([]byte, error) {
+	mcpConfig, err := c.GetBotMcpConfig(ctx, corpName, appName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find the MCP URL for the requested bizType
+	var mcpURL string
+	for _, info := range mcpConfig.McpInfos {
+		if info.BizType == bizType {
+			mcpURL = info.McpURL
+			break
+		}
+	}
+
+	if mcpURL == "" {
+		return nil, fmt.Errorf("no mcp url found for biz_type '%s'", bizType)
+	}
+
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", mcpURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call bot mcp: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	return respBody, nil
 }

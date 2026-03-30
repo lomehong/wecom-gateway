@@ -80,6 +80,7 @@ func (s *Service) InitializeSystem(ctx context.Context) error {
 				ID:        appID,
 				Name:      appCfg.Name,
 				CorpName:  corpCfg.Name,
+				AppType:   "app",
 				AgentID:   appCfg.AgentID,
 				SecretEnc: secretEnc,
 				Nonce:     string(nonce),

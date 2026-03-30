@@ -82,7 +82,9 @@ func runMigrations(db *sql.DB) error {
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,
 			corp_name TEXT NOT NULL,
-			agent_id INTEGER NOT NULL,
+			app_type TEXT NOT NULL DEFAULT 'app',
+			agent_id INTEGER NOT NULL DEFAULT 0,
+			bot_id TEXT,
 			secret_enc TEXT NOT NULL,
 			nonce TEXT NOT NULL,
 			access_token TEXT,
@@ -130,6 +132,15 @@ func runMigrations(db *sql.DB) error {
 		if _, err := db.Exec(migration); err != nil {
 			return fmt.Errorf("failed to run migration: %s: %w", migration, err)
 		}
+	}
+
+	// Alter-table migrations for Bot support (safe to run multiple times)
+	alterMigrations := []string{
+		"ALTER TABLE wecom_apps ADD COLUMN app_type TEXT NOT NULL DEFAULT 'app'",
+		"ALTER TABLE wecom_apps ADD COLUMN bot_id TEXT",
+	}
+	for _, m := range alterMigrations {
+		db.Exec(m) // ignore "duplicate column" errors
 	}
 
 	// Enable foreign key constraints (SQLite defaults to OFF)
@@ -436,13 +447,13 @@ func (s *SQLite) DeleteWeComCorp(ctx context.Context, name string) error {
 
 func (s *SQLite) CreateWeComApp(ctx context.Context, app *WeComApp) error {
 	query := `
-		INSERT INTO wecom_apps (id, name, corp_name, agent_id, secret_enc, nonce, access_token, token_expires_at, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO wecom_apps (id, name, corp_name, app_type, agent_id, bot_id, secret_enc, nonce, access_token, token_expires_at, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	now := time.Now()
 	_, err := s.db.ExecContext(ctx, query,
-		app.ID, app.Name, app.CorpName, app.AgentID, app.SecretEnc, app.Nonce,
+		app.ID, app.Name, app.CorpName, app.AppType, app.AgentID, app.BotID, app.SecretEnc, app.Nonce,
 		app.AccessToken, app.TokenExpiresAt, now, now,
 	)
 
@@ -458,7 +469,7 @@ func (s *SQLite) CreateWeComApp(ctx context.Context, app *WeComApp) error {
 
 func (s *SQLite) GetWeComApp(ctx context.Context, corpName, appName string) (*WeComApp, error) {
 	query := `
-		SELECT id, name, corp_name, agent_id, secret_enc, nonce, access_token, token_expires_at, created_at, updated_at
+		SELECT id, name, corp_name, app_type, agent_id, bot_id, secret_enc, nonce, access_token, token_expires_at, created_at, updated_at
 		FROM wecom_apps WHERE corp_name = ? AND name = ?
 	`
 
@@ -466,7 +477,7 @@ func (s *SQLite) GetWeComApp(ctx context.Context, corpName, appName string) (*We
 	var app WeComApp
 
 	err := row.Scan(
-		&app.ID, &app.Name, &app.CorpName, &app.AgentID, &app.SecretEnc, &app.Nonce,
+		&app.ID, &app.Name, &app.CorpName, &app.AppType, &app.AgentID, &app.BotID, &app.SecretEnc, &app.Nonce,
 		&app.AccessToken, &app.TokenExpiresAt, &app.CreatedAt, &app.UpdatedAt,
 	)
 
@@ -482,7 +493,7 @@ func (s *SQLite) GetWeComApp(ctx context.Context, corpName, appName string) (*We
 
 func (s *SQLite) ListWeComApps(ctx context.Context, corpName string) ([]*WeComApp, error) {
 	query := `
-		SELECT id, name, corp_name, agent_id, secret_enc, nonce, access_token, token_expires_at, created_at, updated_at
+		SELECT id, name, corp_name, app_type, agent_id, bot_id, secret_enc, nonce, access_token, token_expires_at, created_at, updated_at
 		FROM wecom_apps WHERE corp_name = ? ORDER BY name
 	`
 
@@ -496,7 +507,7 @@ func (s *SQLite) ListWeComApps(ctx context.Context, corpName string) ([]*WeComAp
 	for rows.Next() {
 		var app WeComApp
 		if err := rows.Scan(
-			&app.ID, &app.Name, &app.CorpName, &app.AgentID, &app.SecretEnc, &app.Nonce,
+			&app.ID, &app.Name, &app.CorpName, &app.AppType, &app.AgentID, &app.BotID, &app.SecretEnc, &app.Nonce,
 			&app.AccessToken, &app.TokenExpiresAt, &app.CreatedAt, &app.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan wecom app: %w", err)
@@ -510,12 +521,12 @@ func (s *SQLite) ListWeComApps(ctx context.Context, corpName string) ([]*WeComAp
 func (s *SQLite) UpdateWeComApp(ctx context.Context, app *WeComApp) error {
 	query := `
 		UPDATE wecom_apps
-		SET name = ?, corp_name = ?, agent_id = ?, secret_enc = ?, nonce = ?, access_token = ?, token_expires_at = ?, updated_at = ?
+		SET name = ?, corp_name = ?, app_type = ?, agent_id = ?, bot_id = ?, secret_enc = ?, nonce = ?, access_token = ?, token_expires_at = ?, updated_at = ?
 		WHERE id = ?
 	`
 
 	result, err := s.db.ExecContext(ctx, query,
-		app.Name, app.CorpName, app.AgentID, app.SecretEnc, app.Nonce,
+		app.Name, app.CorpName, app.AppType, app.AgentID, app.BotID, app.SecretEnc, app.Nonce,
 		app.AccessToken, app.TokenExpiresAt, time.Now(), app.ID,
 	)
 
@@ -872,7 +883,7 @@ func (s *SQLite) GetWeComCorpByID(ctx context.Context, id string) (*WeComCorp, e
 
 func (s *SQLite) GetWeComAppByID(ctx context.Context, id string) (*WeComApp, error) {
 	query := `
-		SELECT id, name, corp_name, agent_id, secret_enc, nonce, access_token, token_expires_at, created_at, updated_at
+		SELECT id, name, corp_name, app_type, agent_id, bot_id, secret_enc, nonce, access_token, token_expires_at, created_at, updated_at
 		FROM wecom_apps WHERE id = ?
 	`
 
@@ -880,7 +891,7 @@ func (s *SQLite) GetWeComAppByID(ctx context.Context, id string) (*WeComApp, err
 	var app WeComApp
 
 	err := row.Scan(
-		&app.ID, &app.Name, &app.CorpName, &app.AgentID, &app.SecretEnc, &app.Nonce,
+		&app.ID, &app.Name, &app.CorpName, &app.AppType, &app.AgentID, &app.BotID, &app.SecretEnc, &app.Nonce,
 		&app.AccessToken, &app.TokenExpiresAt, &app.CreatedAt, &app.UpdatedAt,
 	)
 
