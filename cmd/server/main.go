@@ -25,6 +25,7 @@ import (
 	"wecom-gateway/internal/message"
 	"wecom-gateway/internal/mcp"
 	"wecom-gateway/internal/openapi"
+	"wecom-gateway/internal/sheet"
 	"wecom-gateway/internal/ratelimit"
 	"wecom-gateway/internal/schedule"
 	"wecom-gateway/internal/store"
@@ -238,6 +239,21 @@ func main() {
 			todoGroup.PUT("/:id", auth.RequirePermission("todo:write"), todoHandler.UpdateTodo)
 			todoGroup.DELETE("/:id", auth.RequirePermission("todo:write"), todoHandler.DeleteTodo)
 			todoGroup.PUT("/:id/status", auth.RequirePermission("todo:write"), todoHandler.ChangeUserStatus)
+		}
+
+		// Smart sheet routes (Phase 3.3)
+		sheetHandler := sheet.NewHandler()
+		sheetGroup := v1.Group("/sheets")
+		sheetGroup.Use(auth.GinMiddleware(authenticator))
+		{
+			sheetGroup.POST("", auth.RequirePermission("document:write"), sheetHandler.CreateSheet)
+			sheetGroup.GET("/:docid/sheets", auth.RequirePermission("document:read"), sheetHandler.ListSheetTabs)
+			sheetGroup.GET("/:docid/sheets/:sheetid/fields", auth.RequirePermission("document:read"), sheetHandler.GetSheetFields)
+			sheetGroup.POST("/:docid/sheets/:sheetid/fields", auth.RequirePermission("document:write"), sheetHandler.AddSheetFields)
+			sheetGroup.GET("/:docid/sheets/:sheetid/records", auth.RequirePermission("document:read"), sheetHandler.GetSheetRecords)
+			sheetGroup.POST("/:docid/sheets/:sheetid/records", auth.RequirePermission("document:write"), sheetHandler.AddSheetRecords)
+			sheetGroup.PUT("/:docid/sheets/:sheetid/records", auth.RequirePermission("document:write"), sheetHandler.UpdateSheetRecords)
+			sheetGroup.DELETE("/:docid/sheets/:sheetid/records", auth.RequirePermission("document:write"), sheetHandler.DeleteSheetRecords)
 		}
 
 		// Document management routes

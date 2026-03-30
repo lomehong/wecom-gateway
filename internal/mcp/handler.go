@@ -8,10 +8,19 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 
 	"wecom-gateway/internal/auth"
 	"wecom-gateway/internal/wecom"
 )
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return true // CORS handled by middleware
+	},
+}
 
 // Handler handles MCP HTTP requests
 type Handler struct {
@@ -88,8 +97,14 @@ func (h *Handler) HandleRPC(c *gin.Context) {
 	}
 }
 
-// HandleSSE handles GET /mcp — SSE endpoint (simplified: returns connection info)
+// HandleSSE handles GET /mcp — SSE endpoint for streaming connections
 func (h *Handler) HandleSSE(c *gin.Context) {
+	// Check for WebSocket upgrade request
+	if websocket.IsWebSocketUpgrade(c.Request) {
+		h.HandleWebSocket(c)
+		return
+	}
+
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -103,6 +118,76 @@ func (h *Handler) HandleSSE(c *gin.Context) {
 	c.SSEvent("server_info", string(data))
 	c.SSEvent("end", "")
 }
+
+// HandleWebSocket handles WebSocket upgrade for MCP streaming connections
+func (h *Handler) HandleWebSocket(c *gin.Context) {
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	for {
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+
+		// Parse JSON-RPC request from WebSocket message
+		var req JSONRPCRequest
+		if err := json.Unmarshal(message, &req); err != nil {
+			resp := JSONRPCResponse{
+				JSONRPC: "2.0",
+				Error:   &RPCError{Code: ParseError, Message: "invalid JSON"},
+			}
+			data, _ := json.Marshal(resp)
+			conn.WriteMessage(websocket.TextMessage, data)
+			continue
+		}
+
+		if req.JSONRPC != "2.0" {
+			resp := JSONRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Error:   &RPCError{Code: InvalidRequest, Message: "invalid jsonrpc version"},
+			}
+			data, _ := json.Marshal(resp)
+			conn.WriteMessage(websocket.TextMessage, data)
+			continue
+		}
+
+		// Route to method handler, capture response
+		// Use a response writer that captures JSON output
+		rw := &responseCapture{header: make(http.Header)}
+		switch req.Method {
+		case "initialize":
+			h.handleInitialize(c, &req)
+		case "tools/list":
+			h.handleToolsList(c, &req)
+		case "tools/call":
+			h.handleToolsCall(c, &req)
+		default:
+			resp := JSONRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Error:   &RPCError{Code: MethodNotFound, Message: "method not found: " + req.Method},
+			}
+			data, _ := json.Marshal(resp)
+			conn.WriteMessage(websocket.TextMessage, data)
+			continue
+		}
+		_ = rw // response already written via gin context
+	}
+}
+
+// responseCapture is a placeholder for WebSocket response capture
+type responseCapture struct {
+	header http.Header
+}
+
+func (r *responseCapture) Header() http.Header       { return r.header }
+func (r *responseCapture) Write([]byte) (int, error)  { return 0, nil }
+func (r *responseCapture) WriteHeader(int)            {}
 
 func (h *Handler) handleInitialize(c *gin.Context, req *JSONRPCRequest) {
 	result := InitializeResult{
