@@ -17,6 +17,7 @@ import (
 	"wecom-gateway/internal/audit"
 	"wecom-gateway/internal/auth"
 	"wecom-gateway/internal/config"
+	"wecom-gateway/internal/contact"
 	"wecom-gateway/internal/crypto"
 	"wecom-gateway/internal/document"
 	"wecom-gateway/internal/grpcserver"
@@ -25,6 +26,7 @@ import (
 	"wecom-gateway/internal/ratelimit"
 	"wecom-gateway/internal/schedule"
 	"wecom-gateway/internal/store"
+	"wecom-gateway/internal/todo"
 	"wecom-gateway/internal/wecom"
 )
 
@@ -84,6 +86,8 @@ func main() {
 	scheduleSvc := schedule.NewService(wecomClient)
 	meetingSvc := meeting.NewService(wecomClient)
 	messageSvc := message.NewService(wecomClient)
+	contactSvc := contact.NewService(wecomClient)
+	todoSvc := todo.NewService(wecomClient)
 	documentClient := document.NewClient(wecomClient)
 	documentSvc := document.NewService(documentClient)
 	adminSvc := admin.NewService(db, cfg, apiKeySvc, auditLogger, encKey)
@@ -92,6 +96,8 @@ func main() {
 	scheduleHandler := schedule.NewHandler(scheduleSvc)
 	meetingHandler := meeting.NewHandler(meetingSvc)
 	messageHandler := message.NewHandler(messageSvc)
+	contactHandler := contact.NewHandler(contactSvc)
+	todoHandler := todo.NewHandler(todoSvc)
 	documentHandler := document.NewHandler(documentSvc)
 	adminHandler := admin.NewHandler(adminSvc, apiKeySvc, auditQuer, authManager)
 
@@ -195,6 +201,26 @@ func main() {
 			messageGroup.POST("/image", auth.RequirePermission("message:send"), messageHandler.SendImage)
 			messageGroup.POST("/file", auth.RequirePermission("message:send"), messageHandler.SendFile)
 			messageGroup.POST("/card", auth.RequirePermission("message:send"), messageHandler.SendCard)
+		}
+
+		// Contact routes
+		contactGroup := v1.Group("/contacts")
+		contactGroup.Use(auth.GinMiddleware(authenticator))
+		{
+			contactGroup.GET("/users", auth.RequirePermission("contact:read"), contactHandler.GetUserList)
+			contactGroup.GET("/users/search", auth.RequirePermission("contact:read"), contactHandler.SearchUser)
+		}
+
+		// Todo routes
+		todoGroup := v1.Group("/todos")
+		todoGroup.Use(auth.GinMiddleware(authenticator))
+		{
+			todoGroup.GET("", auth.RequirePermission("todo:read"), todoHandler.GetTodoList)
+			todoGroup.GET("/:id", auth.RequirePermission("todo:read"), todoHandler.GetTodoDetail)
+			todoGroup.POST("", auth.RequirePermission("todo:write"), todoHandler.CreateTodo)
+			todoGroup.PUT("/:id", auth.RequirePermission("todo:write"), todoHandler.UpdateTodo)
+			todoGroup.DELETE("/:id", auth.RequirePermission("todo:write"), todoHandler.DeleteTodo)
+			todoGroup.PUT("/:id/status", auth.RequirePermission("todo:write"), todoHandler.ChangeUserStatus)
 		}
 
 		// Document management routes

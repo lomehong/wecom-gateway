@@ -252,3 +252,79 @@ func TestService_SendCard(t *testing.T) {
 func (m *MockWeComClient) GetAccessToken(ctx context.Context, corpName, appName string) (string, error) {
 	return "mock-access-token", nil
 }
+
+func (m *MockWeComClient) GetUserList(ctx context.Context, corpName, appName string, departmentID int) ([]*wecom.ContactUser, error) {
+	return nil, nil
+}
+
+func (m *MockWeComClient) SearchUser(ctx context.Context, corpName, appName string, query string) ([]*wecom.ContactUser, error) {
+	return nil, nil
+}
+
+func (m *MockWeComClient) GetTodoList(ctx context.Context, corpName, appName string, opts *wecom.TodoListOptions) (*wecom.TodoListResult, error) {
+	return nil, nil
+}
+
+func (m *MockWeComClient) GetTodoDetail(ctx context.Context, corpName, appName string, todoIDs []string) ([]*wecom.TodoDetail, error) {
+	return nil, nil
+}
+
+func (m *MockWeComClient) CreateTodo(ctx context.Context, corpName, appName string, params *wecom.CreateTodoParams) (string, error) {
+	return "", nil
+}
+
+func (m *MockWeComClient) UpdateTodo(ctx context.Context, corpName, appName string, todoID string, params *wecom.UpdateTodoParams) error {
+	return nil
+}
+
+func (m *MockWeComClient) DeleteTodo(ctx context.Context, corpName, appName string, todoID string) error {
+	return nil
+}
+
+func (m *MockWeComClient) ChangeTodoUserStatus(ctx context.Context, corpName, appName string, todoID string, status int) error {
+	return nil
+}
+
+func (m *MockWeComClient) CreateMeeting(ctx context.Context, corpName, appName string, params *wecom.CreateMeetingParams) (*wecom.MeetingInfo, error) {
+	return nil, nil
+}
+
+func (m *MockWeComClient) CancelMeeting(ctx context.Context, corpName, appName string, meetingID string) error {
+	return nil
+}
+
+func (m *MockWeComClient) UpdateMeetingInvitees(ctx context.Context, corpName, appName string, meetingID string, invitees *wecom.MeetingInvitees) error {
+	return nil
+}
+
+func (m *MockWeComClient) ListMeetings(ctx context.Context, corpName, appName string, opts *wecom.MeetingListOptions) (*wecom.MeetingListResult, error) {
+	return nil, nil
+}
+
+func (m *MockWeComClient) GetMeetingInfo(ctx context.Context, corpName, appName string, meetingID string) (*wecom.MeetingInfo, error) {
+	return nil, nil
+}
+
+func (m *MockWeComClient) GetChatList(ctx context.Context, corpName, appName string, beginTime, endTime int64) (*wecom.ChatListResult, error) {
+	return &wecom.ChatListResult{
+		ChatList: []wecom.ChatInfo{
+			{ChatID: "chat-1", ChatType: 1, Name: "Group A"},
+		},
+	}, nil
+}
+
+func (m *MockWeComClient) GetChatMessages(ctx context.Context, corpName, appName string, chatType int, chatID string, beginTime, endTime int64) (*wecom.ChatMessagesResult, error) {
+	return &wecom.ChatMessagesResult{
+		MsgList: []wecom.ChatMessage{
+			{MsgID: "msg-1", MsgType: "text", From: "user1"},
+		},
+	}, nil
+}
+
+func (m *MockWeComClient) DownloadMedia(ctx context.Context, corpName, appName string, mediaID string) ([]byte, string, error) {
+	return []byte("mock-media-content"), "mock-file.txt", nil
+}
+
+func (m *MockWeComClient) CheckAvailability(ctx context.Context, corpName, appName string, opts *wecom.AvailabilityOptions) ([]*wecom.UserAvailability, error) {
+	return nil, nil
+}

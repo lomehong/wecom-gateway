@@ -261,3 +261,127 @@ func (h *Handler) SendCard(c *gin.Context) {
 
 	httputil.Success(c, result)
 }
+
+// --- Message Pull Handlers (Phase 3.1) ---
+
+// GetChatListRequest represents query parameters for listing chats
+type GetChatListRequest struct {
+	BeginTime int64 `form:"begin_time" binding:"required"`
+	EndTime   int64 `form:"end_time" binding:"required"`
+}
+
+// GetChatList handles GET /v1/messages/chats
+// @Summary Get chat list
+// @Description Get the list of chat conversations in a time range (last 7 days)
+// @Tags messages
+// @Accept json
+// @Produce json
+// @Param begin_time query int true "Begin time (unix timestamp)"
+// @Param end_time query int true "End time (unix timestamp)"
+// @Success 200 {object} httputil.Response
+// @Failure 400 {object} httputil.Response
+// @Failure 403 {object} httputil.Response
+// @Failure 500 {object} httputil.Response
+// @Security BearerAuth
+// @Router /v1/messages/chats [get]
+func (h *Handler) GetChatList(c *gin.Context) {
+	var req GetChatListRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		httputil.BadRequest(c, "Invalid query parameters: "+err.Error())
+		return
+	}
+
+	authCtx, _ := auth.GetAuthContext(c)
+
+	result, err := h.service.GetChatList(c.Request.Context(), authCtx, req.BeginTime, req.EndTime)
+	if err != nil {
+		httputil.InternalError(c, err.Error())
+		return
+	}
+
+	httputil.Success(c, gin.H{
+		"chat_list": result.ChatList,
+		"count":     len(result.ChatList),
+	})
+}
+
+// GetChatMessagesRequest represents query parameters for pulling messages
+type GetChatMessagesRequest struct {
+	BeginTime int64 `form:"begin_time" binding:"required"`
+	EndTime   int64 `form:"end_time" binding:"required"`
+	ChatType  int   `form:"chat_type"`
+}
+
+// GetChatMessages handles GET /v1/messages/chats/:chatid/messages
+// @Summary Get chat messages
+// @Description Pull messages from a chat conversation
+// @Tags messages
+// @Accept json
+// @Produce json
+// @Param chatid path string true "Chat ID"
+// @Param begin_time query int true "Begin time (unix timestamp)"
+// @Param end_time query int true "End time (unix timestamp)"
+// @Param chat_type query int false "Chat type"
+// @Success 200 {object} httputil.Response
+// @Failure 400 {object} httputil.Response
+// @Failure 403 {object} httputil.Response
+// @Failure 500 {object} httputil.Response
+// @Security BearerAuth
+// @Router /v1/messages/chats/{chatid}/messages [get]
+func (h *Handler) GetChatMessages(c *gin.Context) {
+	chatID := c.Param("chatid")
+	if chatID == "" {
+		httputil.BadRequest(c, "chat id is required")
+		return
+	}
+
+	var req GetChatMessagesRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		httputil.BadRequest(c, "Invalid query parameters: "+err.Error())
+		return
+	}
+
+	authCtx, _ := auth.GetAuthContext(c)
+
+	result, err := h.service.GetChatMessages(c.Request.Context(), authCtx, req.ChatType, chatID, req.BeginTime, req.EndTime)
+	if err != nil {
+		httputil.InternalError(c, err.Error())
+		return
+	}
+
+	httputil.Success(c, gin.H{
+		"msg_list": result.MsgList,
+		"count":    len(result.MsgList),
+	})
+}
+
+// DownloadMedia handles GET /v1/messages/media/:mediaid
+// @Summary Download media
+// @Description Download a media file by media ID
+// @Tags messages
+// @Accept json
+// @Produce json
+// @Param mediaid path string true "Media ID"
+// @Success 200 {object} httputil.Response
+// @Failure 403 {object} httputil.Response
+// @Failure 500 {object} httputil.Response
+// @Security BearerAuth
+// @Router /v1/messages/media/{mediaid} [get]
+func (h *Handler) DownloadMedia(c *gin.Context) {
+	mediaID := c.Param("mediaid")
+	if mediaID == "" {
+		httputil.BadRequest(c, "media id is required")
+		return
+	}
+
+	authCtx, _ := auth.GetAuthContext(c)
+
+	data, filename, err := h.service.DownloadMedia(c.Request.Context(), authCtx, mediaID)
+	if err != nil {
+		httputil.InternalError(c, err.Error())
+		return
+	}
+
+	c.Data(200, "application/octet-stream", data)
+	c.Header("Content-Disposition", "attachment; filename=\""+filename+"\"")
+}

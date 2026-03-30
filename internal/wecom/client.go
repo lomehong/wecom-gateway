@@ -43,6 +43,33 @@ type Client interface {
 
 	// Token operations
 	GetAccessToken(ctx context.Context, corpName, appName string) (string, error)
+
+	// Contact operations
+	GetUserList(ctx context.Context, corpName, appName string, departmentID int) ([]*ContactUser, error)
+	SearchUser(ctx context.Context, corpName, appName string, query string) ([]*ContactUser, error)
+
+	// Todo operations
+	GetTodoList(ctx context.Context, corpName, appName string, opts *TodoListOptions) (*TodoListResult, error)
+	GetTodoDetail(ctx context.Context, corpName, appName string, todoIDs []string) ([]*TodoDetail, error)
+	CreateTodo(ctx context.Context, corpName, appName string, params *CreateTodoParams) (string, error)
+	UpdateTodo(ctx context.Context, corpName, appName string, todoID string, params *UpdateTodoParams) error
+	DeleteTodo(ctx context.Context, corpName, appName string, todoID string) error
+	ChangeTodoUserStatus(ctx context.Context, corpName, appName string, todoID string, status int) error
+
+	// Meeting appointment operations (Phase 1.3)
+	CreateMeeting(ctx context.Context, corpName, appName string, params *CreateMeetingParams) (*MeetingInfo, error)
+	CancelMeeting(ctx context.Context, corpName, appName string, meetingID string) error
+	UpdateMeetingInvitees(ctx context.Context, corpName, appName string, meetingID string, invitees *MeetingInvitees) error
+	ListMeetings(ctx context.Context, corpName, appName string, opts *MeetingListOptions) (*MeetingListResult, error)
+	GetMeetingInfo(ctx context.Context, corpName, appName string, meetingID string) (*MeetingInfo, error)
+
+	// Message pull operations (Phase 3.1)
+	GetChatList(ctx context.Context, corpName, appName string, beginTime, endTime int64) (*ChatListResult, error)
+	GetChatMessages(ctx context.Context, corpName, appName string, chatType int, chatID string, beginTime, endTime int64) (*ChatMessagesResult, error)
+	DownloadMedia(ctx context.Context, corpName, appName string, mediaID string) ([]byte, string, error)
+
+	// Schedule availability operations (Phase 3.2)
+	CheckAvailability(ctx context.Context, corpName, appName string, opts *AvailabilityOptions) ([]*UserAvailability, error)
 }
 
 // HTTPClient represents the HTTP client interface
@@ -829,4 +856,615 @@ func splitStrings(s, sep string) []string {
 		return []string{}
 	}
 	return strings.Split(s, sep)
+}
+
+// Contact operations implementation
+
+func (c *impl) GetUserList(ctx context.Context, corpName, appName string, departmentID int) ([]*ContactUser, error) {
+	token, err := c.getToken(ctx, corpName, appName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use /user/list for detailed user info
+	url := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/user/list?access_token=%s&department_id=%d", token, departmentID)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		ErrCode int            `json:"errcode"`
+		ErrMsg  string         `json:"errmsg"`
+		UserList []ContactUser `json:"userlist"`
+	}
+
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+
+	if result.ErrCode != 0 {
+		return nil, &WeComAPIError{ErrCode: result.ErrCode, ErrMsg: result.ErrMsg}
+	}
+
+	users := make([]*ContactUser, len(result.UserList))
+	for i := range result.UserList {
+		users[i] = &result.UserList[i]
+	}
+
+	return users, nil
+}
+
+func (c *impl) SearchUser(ctx context.Context, corpName, appName string, query string) ([]*ContactUser, error) {
+	// Search user: first get the full user list from root department (id=1),
+	// then filter by name/alias matching query
+	users, err := c.GetUserList(ctx, corpName, appName, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	queryLower := strings.ToLower(query)
+	var matched []*ContactUser
+	for _, user := range users {
+		if strings.Contains(strings.ToLower(user.Name), queryLower) ||
+			strings.Contains(strings.ToLower(user.Alias), queryLower) ||
+			strings.Contains(strings.ToLower(user.UserID), queryLower) {
+			matched = append(matched, user)
+		}
+	}
+
+	return matched, nil
+}
+
+// Todo operations implementation
+
+func (c *impl) GetTodoList(ctx context.Context, corpName, appName string, opts *TodoListOptions) (*TodoListResult, error) {
+	if opts == nil {
+		opts = &TodoListOptions{}
+	}
+
+	body := map[string]interface{}{
+		"size": 100,
+	}
+	if opts.CreateBeginTime != nil {
+		body["create_begin_time"] = opts.CreateBeginTime.Unix()
+	}
+	if opts.CreateEndTime != nil {
+		body["create_end_time"] = opts.CreateEndTime.Unix()
+	}
+	if opts.RemindBeginTime != nil {
+		body["remind_begin_time"] = opts.RemindBeginTime.Unix()
+	}
+	if opts.RemindEndTime != nil {
+		body["remind_end_time"] = opts.RemindEndTime.Unix()
+	}
+	if opts.Cursor != "" {
+		body["cursor"] = opts.Cursor
+	}
+	if opts.Limit > 0 {
+		body["size"] = opts.Limit
+	}
+
+	resp, err := c.makeAPIRequest(ctx, corpName, appName, "POST", "/oa/todo/list", body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		ErrCode    int         `json:"errcode"`
+		ErrMsg     string      `json:"errmsg"`
+		IndexList  []TodoIndex `json:"index_list"`
+		NextCursor string      `json:"next_cursor"`
+		HasMore    bool        `json:"has_more"`
+	}
+
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, err
+	}
+
+	if result.ErrCode != 0 {
+		return nil, &WeComAPIError{ErrCode: result.ErrCode, ErrMsg: result.ErrMsg}
+	}
+
+	return &TodoListResult{
+		IndexList:  result.IndexList,
+		NextCursor: result.NextCursor,
+		HasMore:    result.HasMore,
+	}, nil
+}
+
+func (c *impl) GetTodoDetail(ctx context.Context, corpName, appName string, todoIDs []string) ([]*TodoDetail, error) {
+	if len(todoIDs) == 0 {
+		return nil, fmt.Errorf("todo_ids is required")
+	}
+
+	body := map[string]interface{}{
+		"todo_id_list": todoIDs,
+	}
+
+	resp, err := c.makeAPIRequest(ctx, corpName, appName, "POST", "/oa/todo/get", body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		ErrCode   int          `json:"errcode"`
+		ErrMsg    string       `json:"errmsg"`
+		TodoList  []TodoDetail `json:"todo_list"`
+	}
+
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, err
+	}
+
+	if result.ErrCode != 0 {
+		return nil, &WeComAPIError{ErrCode: result.ErrCode, ErrMsg: result.ErrMsg}
+	}
+
+	details := make([]*TodoDetail, len(result.TodoList))
+	for i := range result.TodoList {
+		details[i] = &result.TodoList[i]
+	}
+
+	return details, nil
+}
+
+func (c *impl) CreateTodo(ctx context.Context, corpName, appName string, params *CreateTodoParams) (string, error) {
+	if params == nil {
+		return "", fmt.Errorf("params is required")
+	}
+
+	body := map[string]interface{}{
+		"content": params.Content,
+	}
+
+	if params.Title != "" {
+		body["title"] = params.Title
+	}
+	if len(params.Assignees) > 0 {
+		body["assigned_user_list"] = params.Assignees
+	}
+	if params.RemindTime != nil {
+		body["remind_time"] = params.RemindTime.Unix()
+	}
+
+	resp, err := c.makeAPIRequest(ctx, corpName, appName, "POST", "/oa/todo/add", body)
+	if err != nil {
+		return "", err
+	}
+
+	var result struct {
+		ErrCode int    `json:"errcode"`
+		ErrMsg  string `json:"errmsg"`
+		TodoID  string `json:"todo_id"`
+	}
+
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return "", err
+	}
+
+	if result.ErrCode != 0 {
+		return "", &WeComAPIError{ErrCode: result.ErrCode, ErrMsg: result.ErrMsg}
+	}
+
+	return result.TodoID, nil
+}
+
+func (c *impl) UpdateTodo(ctx context.Context, corpName, appName string, todoID string, params *UpdateTodoParams) error {
+	if params == nil {
+		return fmt.Errorf("params is required")
+	}
+
+	body := map[string]interface{}{
+		"todo_id": todoID,
+	}
+
+	if params.Title != nil {
+		body["title"] = *params.Title
+	}
+	if params.Content != nil {
+		body["content"] = *params.Content
+	}
+	if params.Status != nil {
+		body["status"] = *params.Status
+	}
+	if params.RemindTime != nil {
+		body["remind_time"] = params.RemindTime.Unix()
+	}
+	if len(params.Assignees) > 0 {
+		body["assigned_user_list"] = params.Assignees
+	}
+
+	resp, err := c.makeAPIRequest(ctx, corpName, appName, "POST", "/oa/todo/update", body)
+	if err != nil {
+		return err
+	}
+
+	var result struct {
+		ErrCode int    `json:"errcode"`
+		ErrMsg  string `json:"errmsg"`
+	}
+
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return err
+	}
+
+	if result.ErrCode != 0 {
+		return &WeComAPIError{ErrCode: result.ErrCode, ErrMsg: result.ErrMsg}
+	}
+
+	return nil
+}
+
+func (c *impl) DeleteTodo(ctx context.Context, corpName, appName string, todoID string) error {
+	body := map[string]interface{}{
+		"todo_id": todoID,
+	}
+
+	resp, err := c.makeAPIRequest(ctx, corpName, appName, "POST", "/oa/todo/del", body)
+	if err != nil {
+		return err
+	}
+
+	var result struct {
+		ErrCode int    `json:"errcode"`
+		ErrMsg  string `json:"errmsg"`
+	}
+
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return err
+	}
+
+	if result.ErrCode != 0 {
+		return &WeComAPIError{ErrCode: result.ErrCode, ErrMsg: result.ErrMsg}
+	}
+
+	return nil
+}
+
+func (c *impl) ChangeTodoUserStatus(ctx context.Context, corpName, appName string, todoID string, status int) error {
+	body := map[string]interface{}{
+		"todo_id": todoID,
+		"status":  status,
+	}
+
+	resp, err := c.makeAPIRequest(ctx, corpName, appName, "POST", "/oa/todo/update_user_status", body)
+	if err != nil {
+		return err
+	}
+
+	var result struct {
+		ErrCode int    `json:"errcode"`
+		ErrMsg  string `json:"errmsg"`
+	}
+
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return err
+	}
+
+	if result.ErrCode != 0 {
+		return &WeComAPIError{ErrCode: result.ErrCode, ErrMsg: result.ErrMsg}
+	}
+
+	return nil
+}
+
+// Meeting appointment operations implementation (Phase 1.3)
+
+func (c *impl) CreateMeeting(ctx context.Context, corpName, appName string, params *CreateMeetingParams) (*MeetingInfo, error) {
+	body := map[string]interface{}{
+		"title":                    params.Title,
+		"meeting_start_datetime":   params.StartDateTime.Unix(),
+		"meeting_duration":         params.Duration,
+	}
+
+	if params.Invitees != nil {
+		body["invitees"] = params.Invitees
+	}
+	if params.MeetingType > 0 {
+		body["meeting_type"] = params.MeetingType
+	}
+	if params.Settings != nil {
+		body["settings"] = params.Settings
+	}
+
+	resp, err := c.makeAPIRequest(ctx, corpName, appName, "POST", "/meeting/create_meeting", body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		ErrCode int    `json:"errcode"`
+		ErrMsg  string `json:"errmsg"`
+		MeetingInfo
+	}
+
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, err
+	}
+
+	if result.ErrCode != 0 {
+		return nil, &WeComAPIError{ErrCode: result.ErrCode, ErrMsg: result.ErrMsg}
+	}
+
+	return &result.MeetingInfo, nil
+}
+
+func (c *impl) CancelMeeting(ctx context.Context, corpName, appName string, meetingID string) error {
+	body := map[string]interface{}{
+		"meetingid": meetingID,
+	}
+
+	resp, err := c.makeAPIRequest(ctx, corpName, appName, "POST", "/meeting/cancel_meeting", body)
+	if err != nil {
+		return err
+	}
+
+	var result struct {
+		ErrCode int    `json:"errcode"`
+		ErrMsg  string `json:"errmsg"`
+	}
+
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return err
+	}
+
+	if result.ErrCode != 0 {
+		return &WeComAPIError{ErrCode: result.ErrCode, ErrMsg: result.ErrMsg}
+	}
+
+	return nil
+}
+
+func (c *impl) UpdateMeetingInvitees(ctx context.Context, corpName, appName string, meetingID string, invitees *MeetingInvitees) error {
+	body := map[string]interface{}{
+		"meetingid": meetingID,
+		"invitees":  invitees,
+	}
+
+	resp, err := c.makeAPIRequest(ctx, corpName, appName, "POST", "/meeting/set_invite_meeting_members", body)
+	if err != nil {
+		return err
+	}
+
+	var result struct {
+		ErrCode int    `json:"errcode"`
+		ErrMsg  string `json:"errmsg"`
+	}
+
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return err
+	}
+
+	if result.ErrCode != 0 {
+		return &WeComAPIError{ErrCode: result.ErrCode, ErrMsg: result.ErrMsg}
+	}
+
+	return nil
+}
+
+func (c *impl) ListMeetings(ctx context.Context, corpName, appName string, opts *MeetingListOptions) (*MeetingListResult, error) {
+	body := map[string]interface{}{
+		"begin_datetime": opts.BeginDatetime,
+		"end_datetime":   opts.EndDatetime,
+	}
+
+	if opts.Limit > 0 {
+		body["limit"] = opts.Limit
+	}
+	if opts.Cursor != "" {
+		body["cursor"] = opts.Cursor
+	}
+
+	resp, err := c.makeAPIRequest(ctx, corpName, appName, "POST", "/meeting/list_user_meetings", body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		ErrCode    int            `json:"errcode"`
+		ErrMsg     string         `json:"errmsg"`
+		MeetingList []MeetingInfo `json:"meeting_list"`
+		NextCursor string         `json:"next_cursor"`
+	}
+
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, err
+	}
+
+	if result.ErrCode != 0 {
+		return nil, &WeComAPIError{ErrCode: result.ErrCode, ErrMsg: result.ErrMsg}
+	}
+
+	return &MeetingListResult{
+		Meetings:   result.MeetingList,
+		NextCursor: result.NextCursor,
+	}, nil
+}
+
+func (c *impl) GetMeetingInfo(ctx context.Context, corpName, appName string, meetingID string) (*MeetingInfo, error) {
+	body := map[string]interface{}{
+		"meetingid": meetingID,
+	}
+
+	resp, err := c.makeAPIRequest(ctx, corpName, appName, "POST", "/meeting/get_meeting_info", body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		ErrCode int    `json:"errcode"`
+		ErrMsg  string `json:"errmsg"`
+		MeetingInfo
+	}
+
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, err
+	}
+
+	if result.ErrCode != 0 {
+		return nil, &WeComAPIError{ErrCode: result.ErrCode, ErrMsg: result.ErrMsg}
+	}
+
+	return &result.MeetingInfo, nil
+}
+
+// Message pull operations implementation (Phase 3.1)
+
+func (c *impl) GetChatList(ctx context.Context, corpName, appName string, beginTime, endTime int64) (*ChatListResult, error) {
+	body := map[string]interface{}{
+		"begin_time": beginTime,
+		"end_time":   endTime,
+	}
+
+	resp, err := c.makeAPIRequest(ctx, corpName, appName, "POST", "/message/get_msg_chat_list", body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		ErrCode  int        `json:"errcode"`
+		ErrMsg   string     `json:"errmsg"`
+		ChatList []ChatInfo `json:"chat_list"`
+	}
+
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, err
+	}
+
+	if result.ErrCode != 0 {
+		return nil, &WeComAPIError{ErrCode: result.ErrCode, ErrMsg: result.ErrMsg}
+	}
+
+	return &ChatListResult{
+		ChatList: result.ChatList,
+	}, nil
+}
+
+func (c *impl) GetChatMessages(ctx context.Context, corpName, appName string, chatType int, chatID string, beginTime, endTime int64) (*ChatMessagesResult, error) {
+	body := map[string]interface{}{
+		"chat_type":  chatType,
+		"chatid":     chatID,
+		"begin_time": beginTime,
+		"end_time":   endTime,
+	}
+
+	resp, err := c.makeAPIRequest(ctx, corpName, appName, "POST", "/message/get_message", body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		ErrCode int          `json:"errcode"`
+		ErrMsg  string       `json:"errmsg"`
+		MsgList []ChatMessage `json:"msg_list"`
+	}
+
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, err
+	}
+
+	if result.ErrCode != 0 {
+		return nil, &WeComAPIError{ErrCode: result.ErrCode, ErrMsg: result.ErrMsg}
+	}
+
+	return &ChatMessagesResult{
+		MsgList: result.MsgList,
+	}, nil
+}
+
+func (c *impl) DownloadMedia(ctx context.Context, corpName, appName string, mediaID string) ([]byte, string, error) {
+	token, err := c.getToken(ctx, corpName, appName)
+	if err != nil {
+		return nil, "", err
+	}
+
+	url := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/media/get?access_token=%s&media_id=%s", token, mediaID)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, "", err
+	}
+
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// Check for JSON error response
+	if resp.Header.Get("Content-Type") == "application/json" || len(respBody) < 200 {
+		var errResp struct {
+			ErrCode int    `json:"errcode"`
+			ErrMsg  string `json:"errmsg"`
+		}
+		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.ErrCode != 0 {
+			return nil, "", &WeComAPIError{ErrCode: errResp.ErrCode, ErrMsg: errResp.ErrMsg}
+		}
+	}
+
+	// Extract filename from Content-Disposition
+	filename := "downloaded_media"
+	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
+		if _, params, err := mime.ParseMediaType(cd); err == nil {
+			if fn, ok := params["filename"]; ok {
+				filename = fn
+			}
+		}
+	}
+
+	return respBody, filename, nil
+}
+
+// Schedule availability operations implementation (Phase 3.2)
+
+func (c *impl) CheckAvailability(ctx context.Context, corpName, appName string, opts *AvailabilityOptions) ([]*UserAvailability, error) {
+	body := map[string]interface{}{
+		"userids":    opts.UserIDs,
+		"start_time": opts.StartTime,
+		"end_time":   opts.EndTime,
+	}
+
+	resp, err := c.makeAPIRequest(ctx, corpName, appName, "POST", "/oa/schedule/check_availability", body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		ErrCode   int               `json:"errcode"`
+		ErrMsg    string            `json:"errmsg"`
+		AvailList []UserAvailability `json:"availability_list"`
+	}
+
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, err
+	}
+
+	if result.ErrCode != 0 {
+		return nil, &WeComAPIError{ErrCode: result.ErrCode, ErrMsg: result.ErrMsg}
+	}
+
+	availabilities := make([]*UserAvailability, len(result.AvailList))
+	for i := range result.AvailList {
+		availabilities[i] = &result.AvailList[i]
+	}
+
+	return availabilities, nil
 }

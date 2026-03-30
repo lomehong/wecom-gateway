@@ -115,3 +115,44 @@ func (s *Service) SendCard(ctx context.Context, authCtx *auth.AuthContext, recei
 
 	return result, nil
 }
+
+// --- Message Pull Service Methods (Phase 3.1) ---
+
+// GetChatList gets the list of chat conversations
+func (s *Service) GetChatList(ctx context.Context, authCtx *auth.AuthContext, beginTime, endTime int64) (*wecom.ChatListResult, error) {
+	corpName := authCtx.CorpName
+	appName := authCtx.AppName
+
+	result, err := s.wecomClient.GetChatList(ctx, corpName, appName, beginTime, endTime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chat list: %w", err)
+	}
+
+	return result, nil
+}
+
+// GetChatMessages pulls messages from a chat conversation
+func (s *Service) GetChatMessages(ctx context.Context, authCtx *auth.AuthContext, chatType int, chatID string, beginTime, endTime int64) (*wecom.ChatMessagesResult, error) {
+	corpName := authCtx.CorpName
+	appName := authCtx.AppName
+
+	result, err := s.wecomClient.GetChatMessages(ctx, corpName, appName, chatType, chatID, beginTime, endTime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chat messages: %w", err)
+	}
+
+	return result, nil
+}
+
+// DownloadMedia downloads a media file
+func (s *Service) DownloadMedia(ctx context.Context, authCtx *auth.AuthContext, mediaID string) ([]byte, string, error) {
+	corpName := authCtx.CorpName
+	appName := authCtx.AppName
+
+	data, filename, err := s.wecomClient.DownloadMedia(ctx, corpName, appName, mediaID)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to download media: %w", err)
+	}
+
+	return data, filename, nil
+}

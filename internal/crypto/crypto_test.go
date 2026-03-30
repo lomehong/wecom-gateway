@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"database/sql"
 	"strings"
 	"testing"
 )
@@ -155,5 +156,36 @@ func TestHashString(t *testing.T) {
 				t.Error("Different input should produce different hash")
 			}
 		})
+	}
+}
+
+func TestDecryptActualDB(t *testing.T) {
+	encKey := GenerateKeyFromPassphrase("default-change-me")
+	
+	db, err := sql.Open("sqlite3", "../../data/wecom.db")
+	if err != nil {
+		t.Skip("DB not available:", err)
+		return
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT name, corp_name, agent_id, secret_enc FROM wecom_apps")
+	if err != nil {
+		t.Skip("Query failed:", err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var name, corpName, secretEnc string
+		var agentID int64
+		rows.Scan(&name, &corpName, &agentID, &secretEnc)
+
+		decrypted, err := DecryptString(secretEnc, encKey)
+		if err != nil {
+			t.Errorf("FAIL App %s (corp=%s agent_id=%d): decrypt error: %v", name, corpName, agentID, err)
+		} else {
+			t.Logf("OK App %s (corp=%s agent_id=%d): secret=%s", name, corpName, agentID, decrypted)
+		}
 	}
 }

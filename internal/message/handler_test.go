@@ -252,3 +252,118 @@ func TestSendMessageRequest_Validation(t *testing.T) {
 		})
 	}
 }
+
+// --- Message Pull Handler Tests (Phase 3.1) ---
+
+func TestHandler_GetChatList_ValidQuery(t *testing.T) {
+	mockClient := wecom.NewMockClient()
+	service := NewService(mockClient)
+	handler := NewHandler(service)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	c.Request = httptest.NewRequest("GET", "/v1/messages/chats?begin_time=1704067200&end_time=1704153600", nil)
+
+	c.Set("auth_context", &auth.AuthContext{
+		CorpName: "test-corp",
+		AppName:  "test-app",
+	})
+
+	handler.GetChatList(c)
+}
+
+func TestHandler_GetChatList_MissingParams(t *testing.T) {
+	mockClient := wecom.NewMockClient()
+	service := NewService(mockClient)
+	handler := NewHandler(service)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	c.Request = httptest.NewRequest("GET", "/v1/messages/chats?begin_time=1704067200", nil)
+
+	c.Set("auth_context", &auth.AuthContext{
+		CorpName: "test-corp",
+		AppName:  "test-app",
+	})
+
+	handler.GetChatList(c)
+	// Should return 400 for missing end_time
+}
+
+func TestHandler_GetChatMessages_ValidRequest(t *testing.T) {
+	mockClient := wecom.NewMockClient()
+	service := NewService(mockClient)
+	handler := NewHandler(service)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	c.Request = httptest.NewRequest("GET", "/v1/messages/chats/chat-1/messages?begin_time=1704067200&end_time=1704153600", nil)
+	c.Params = gin.Params{gin.Param{Key: "chatid", Value: "chat-1"}}
+
+	c.Set("auth_context", &auth.AuthContext{
+		CorpName: "test-corp",
+		AppName:  "test-app",
+	})
+
+	handler.GetChatMessages(c)
+}
+
+func TestHandler_GetChatMessages_MissingChatID(t *testing.T) {
+	mockClient := wecom.NewMockClient()
+	service := NewService(mockClient)
+	handler := NewHandler(service)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	c.Request = httptest.NewRequest("GET", "/v1/messages/chats//messages?begin_time=1704067200&end_time=1704153600", nil)
+
+	c.Set("auth_context", &auth.AuthContext{
+		CorpName: "test-corp",
+		AppName:  "test-app",
+	})
+
+	handler.GetChatMessages(c)
+	// Should return 400 for missing chat ID
+}
+
+func TestHandler_DownloadMedia_ValidRequest(t *testing.T) {
+	mockClient := wecom.NewMockClient()
+	service := NewService(mockClient)
+	handler := NewHandler(service)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	c.Request = httptest.NewRequest("GET", "/v1/messages/media/media-123", nil)
+	c.Params = gin.Params{gin.Param{Key: "mediaid", Value: "media-123"}}
+
+	c.Set("auth_context", &auth.AuthContext{
+		CorpName: "test-corp",
+		AppName:  "test-app",
+	})
+
+	handler.DownloadMedia(c)
+}
+
+func TestHandler_DownloadMedia_MissingMediaID(t *testing.T) {
+	mockClient := wecom.NewMockClient()
+	service := NewService(mockClient)
+	handler := NewHandler(service)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	c.Request = httptest.NewRequest("GET", "/v1/messages/media/", nil)
+
+	c.Set("auth_context", &auth.AuthContext{
+		CorpName: "test-corp",
+		AppName:  "test-app",
+	})
+
+	handler.DownloadMedia(c)
+	// Should return 400 for missing media ID
+}
