@@ -476,15 +476,9 @@ func (s *SQLite) GetWeComApp(ctx context.Context, corpName, appName string) (*We
 	row := s.db.QueryRowContext(ctx, query, corpName, appName)
 	var app WeComApp
 
-	err := row.Scan(
-		&app.ID, &app.Name, &app.CorpName, &app.AppType, &app.AgentID, &app.BotID, &app.SecretEnc, &app.Nonce,
-		&app.AccessToken, &app.TokenExpiresAt, &app.CreatedAt, &app.UpdatedAt,
-	)
-
-	if err == sql.ErrNoRows {
+	if err := scanWeComApp(row, &app); err == sql.ErrNoRows {
 		return nil, ErrNotFound
-	}
-	if err != nil {
+	} else if err != nil {
 		return nil, fmt.Errorf("failed to get wecom app: %w", err)
 	}
 
@@ -506,10 +500,7 @@ func (s *SQLite) ListWeComApps(ctx context.Context, corpName string) ([]*WeComAp
 	var apps []*WeComApp
 	for rows.Next() {
 		var app WeComApp
-		if err := rows.Scan(
-			&app.ID, &app.Name, &app.CorpName, &app.AppType, &app.AgentID, &app.BotID, &app.SecretEnc, &app.Nonce,
-			&app.AccessToken, &app.TokenExpiresAt, &app.CreatedAt, &app.UpdatedAt,
-		); err != nil {
+		if err := scanWeComApp(rows, &app); err != nil {
 			return nil, fmt.Errorf("failed to scan wecom app: %w", err)
 		}
 		apps = append(apps, &app)
@@ -879,6 +870,19 @@ func (s *SQLite) GetWeComCorpByID(ctx context.Context, id string) (*WeComCorp, e
 	return &corp, nil
 }
 
+// scanWeComApp scans a row into a WeComApp, handling nullable bot_id column
+func scanWeComApp(scanner interface{ Scan(dest ...interface{}) error }, app *WeComApp) error {
+	var botID sql.NullString
+	err := scanner.Scan(
+		&app.ID, &app.Name, &app.CorpName, &app.AppType, &app.AgentID, &botID, &app.SecretEnc, &app.Nonce,
+		&app.AccessToken, &app.TokenExpiresAt, &app.CreatedAt, &app.UpdatedAt,
+	)
+	if botID.Valid {
+		app.BotID = botID.String
+	}
+	return err
+}
+
 // WeCom App operations - add GetWeComAppByID and DeleteWeComApp by ID
 
 func (s *SQLite) GetWeComAppByID(ctx context.Context, id string) (*WeComApp, error) {
@@ -890,15 +894,9 @@ func (s *SQLite) GetWeComAppByID(ctx context.Context, id string) (*WeComApp, err
 	row := s.db.QueryRowContext(ctx, query, id)
 	var app WeComApp
 
-	err := row.Scan(
-		&app.ID, &app.Name, &app.CorpName, &app.AppType, &app.AgentID, &app.BotID, &app.SecretEnc, &app.Nonce,
-		&app.AccessToken, &app.TokenExpiresAt, &app.CreatedAt, &app.UpdatedAt,
-	)
-
-	if err == sql.ErrNoRows {
+	if err := scanWeComApp(row, &app); err == sql.ErrNoRows {
 		return nil, ErrNotFound
-	}
-	if err != nil {
+	} else if err != nil {
 		return nil, fmt.Errorf("failed to get wecom app: %w", err)
 	}
 
