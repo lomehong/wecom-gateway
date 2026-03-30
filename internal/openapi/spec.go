@@ -257,6 +257,21 @@ func buildPaths() map[string]PathItem {
 		},
 	}
 
+	// Availability check (Phase 3.2)
+	paths["/v1/schedules/availability"] = PathItem{
+		"post": Operation{
+			Tags:        []string{"schedules"},
+			Summary:     "查询成员闲忙",
+			OperationID: "checkAvailability",
+			RequestBody: jsonBody("闲忙查询参数", true, "#/components/schemas/ApiResponse"),
+			Responses: map[string]Response{
+				"200": response("查询成功", "#/components/schemas/ApiResponse"),
+				"403": errResponse("权限不足"),
+			},
+			Security: []map[string][]string{{"BearerAuth": {}}},
+		},
+	}
+
 	// === Meeting Rooms ===
 	paths["/v1/meeting-rooms"] = PathItem{
 		"get": Operation{
@@ -425,6 +440,58 @@ func buildPaths() map[string]PathItem {
 			RequestBody: jsonBody("卡片参数", true, "#/components/schemas/SendCardRequest"),
 			Responses: map[string]Response{
 				"200": response("发送成功", "#/components/schemas/SendResult"),
+				"403": errResponse("权限不足"),
+			},
+			Security: []map[string][]string{{"BearerAuth": {}}},
+		},
+	}
+
+	// Message pull (Phase 3.1)
+	paths["/v1/messages/chats"] = PathItem{
+		"get": Operation{
+			Tags:        []string{"messages"},
+			Summary:     "获取会话列表",
+			OperationID: "getChatList",
+			Parameters: []Parameter{
+				{Name: "begin_time", In: "query", Description: "开始时间 (unix timestamp)", Required: true, Schema: intSchema()},
+				{Name: "end_time", In: "query", Description: "结束时间 (unix timestamp)", Required: true, Schema: intSchema()},
+				{Name: "limit", In: "query", Description: "分页大小", Required: false, Schema: intSchema()},
+				{Name: "cursor", In: "query", Description: "分页游标", Required: false, Schema: strSchema()},
+			},
+			Responses: map[string]Response{
+				"200": response("获取成功", "#/components/schemas/ApiResponse"),
+				"403": errResponse("权限不足"),
+			},
+			Security: []map[string][]string{{"BearerAuth": {}}},
+		},
+	}
+	paths["/v1/messages/chats/{chatid}/messages"] = PathItem{
+		"get": Operation{
+			Tags:        []string{"messages"},
+			Summary:     "拉取会话消息",
+			OperationID: "getChatMessages",
+			Parameters: []Parameter{
+				{Name: "chatid", In: "path", Description: "会话ID", Required: true, Schema: strSchema()},
+				{Name: "begin_time", In: "query", Description: "开始时间 (unix timestamp)", Required: true, Schema: intSchema()},
+				{Name: "end_time", In: "query", Description: "结束时间 (unix timestamp)", Required: true, Schema: intSchema()},
+			},
+			Responses: map[string]Response{
+				"200": response("获取成功", "#/components/schemas/ApiResponse"),
+				"403": errResponse("权限不足"),
+			},
+			Security: []map[string][]string{{"BearerAuth": {}}},
+		},
+	}
+	paths["/v1/messages/media/{mediaid}"] = PathItem{
+		"get": Operation{
+			Tags:        []string{"messages"},
+			Summary:     "下载媒体文件",
+			OperationID: "downloadMedia",
+			Parameters: []Parameter{
+				{Name: "mediaid", In: "path", Description: "媒体ID", Required: true, Schema: strSchema()},
+			},
+			Responses: map[string]Response{
+				"200": response("下载成功", "#/components/schemas/ApiResponse"),
 				"403": errResponse("权限不足"),
 			},
 			Security: []map[string][]string{{"BearerAuth": {}}},

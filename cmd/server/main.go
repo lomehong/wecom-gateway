@@ -183,6 +183,7 @@ func main() {
 			scheduleGroup.GET("/:id", auth.RequirePermission("calendar:read"), scheduleHandler.GetScheduleByID)
 			scheduleGroup.PATCH("/:id", auth.RequirePermission("calendar:write"), scheduleHandler.UpdateSchedule)
 			scheduleGroup.DELETE("/:id", auth.RequirePermission("calendar:write"), scheduleHandler.DeleteSchedule)
+			scheduleGroup.POST("/availability", auth.RequirePermission("calendar:read"), scheduleHandler.CheckAvailability)
 		}
 
 		// Meeting room routes
@@ -194,6 +195,17 @@ func main() {
 			meetingGroup.POST("/:id/bookings", auth.RequirePermission("meetingroom:write"), meetingHandler.BookMeetingRoom)
 		}
 
+		// Meeting appointment routes
+		meetingApptGroup := v1.Group("/meetings")
+		meetingApptGroup.Use(auth.GinMiddleware(authenticator))
+		{
+			meetingApptGroup.POST("", auth.RequirePermission("meeting:write"), meetingHandler.CreateMeeting)
+			meetingApptGroup.DELETE("/:id", auth.RequirePermission("meeting:write"), meetingHandler.CancelMeeting)
+			meetingApptGroup.PUT("/:id/invitees", auth.RequirePermission("meeting:write"), meetingHandler.UpdateInvitees)
+			meetingApptGroup.GET("", auth.RequirePermission("meeting:read"), meetingHandler.ListMeetings)
+			meetingApptGroup.GET("/:id", auth.RequirePermission("meeting:read"), meetingHandler.GetMeetingInfo)
+		}
+
 		// Message routes
 		messageGroup := v1.Group("/messages")
 		messageGroup.Use(auth.GinMiddleware(authenticator))
@@ -203,6 +215,9 @@ func main() {
 			messageGroup.POST("/image", auth.RequirePermission("message:send"), messageHandler.SendImage)
 			messageGroup.POST("/file", auth.RequirePermission("message:send"), messageHandler.SendFile)
 			messageGroup.POST("/card", auth.RequirePermission("message:send"), messageHandler.SendCard)
+			messageGroup.GET("/chats", auth.RequirePermission("message:read"), messageHandler.GetChatList)
+			messageGroup.GET("/chats/:chatid/messages", auth.RequirePermission("message:read"), messageHandler.GetChatMessages)
+			messageGroup.GET("/media/:mediaid", auth.RequirePermission("message:read"), messageHandler.DownloadMedia)
 		}
 
 		// Contact routes
@@ -339,8 +354,15 @@ func main() {
 
 // corsMiddleware applies CORS headers
 func corsMiddleware() gin.HandlerFunc {
+	// Read allowed origins from config or environment variable
+	// Default: allow all origins in development mode
+	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
+	if allowedOrigin == "" {
+		allowedOrigin = "*"
+	}
+
 	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Origin", allowedOrigin)
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
 

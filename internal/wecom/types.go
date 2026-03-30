@@ -1,6 +1,9 @@
 package wecom
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // Bot MCP config types for AI Bot authentication
 
@@ -156,7 +159,15 @@ type WeComAPIError struct {
 }
 
 func (e *WeComAPIError) Error() string {
-	return e.ErrMsg
+	// Strip hint/debug info from error message for security
+	msg := e.ErrMsg
+	if idx := strings.Index(msg, ", hint:"); idx > 0 {
+		msg = msg[:idx]
+	}
+	if idx := strings.Index(msg, ", more info at"); idx > 0 {
+		msg = msg[:idx]
+	}
+	return msg
 }
 
 // IsAccessTokenExpired checks if the error indicates expired access token

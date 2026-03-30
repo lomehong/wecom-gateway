@@ -241,9 +241,15 @@ func (s *Service) validateCreateRequest(req *CreateKeyRequest) error {
 		"calendar:write":     true,
 		"meetingroom:read":   true,
 		"meetingroom:write":  true,
+		"meeting:read":       true,
+		"meeting:write":      true,
 		"message:send":       true,
+		"message:read":       true,
 		"document:read":      true,
 		"document:write":     true,
+		"contact:read":       true,
+		"todo:read":          true,
+		"todo:write":         true,
 		"*":                  true, // Admin wildcard
 	}
 
